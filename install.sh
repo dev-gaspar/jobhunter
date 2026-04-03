@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Colors
+# Colores
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
@@ -17,58 +17,58 @@ echo "  ██   ██║██║   ██║██╔══██╗██╔
 echo "  ╚█████╔╝╚██████╔╝██████╔╝██║  ██║╚██████╔╝██║ ╚████║   ██║   ███████╗██║  ██║"
 echo "   ╚════╝  ╚═════╝ ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚═╝  ╚═╝"
 echo -e "${NC}"
-echo -e "${DIM}  AI-Powered Job Search & Auto Apply  |  Installer${NC}"
+echo -e "${DIM}  Busqueda de empleo con IA  |  Instalador${NC}"
 echo ""
 
 INSTALL_DIR="${JOBHUNTER_DIR:-$HOME/.jobhunter}"
 BIN_DIR="/usr/local/bin"
 
-# Fallback to ~/.local/bin if no sudo access
+# Si no hay acceso a /usr/local/bin, usar ~/.local/bin
 if [ ! -w "$BIN_DIR" ] && [ "$(id -u)" -ne 0 ]; then
     BIN_DIR="$HOME/.local/bin"
     mkdir -p "$BIN_DIR"
 fi
 
-echo -e "${BOLD}Installing JobHunter AI${NC}"
+echo -e "${BOLD}Instalando JobHunter AI${NC}"
 echo ""
 
-# Check Python
+# Verificar Python
 if ! command -v python3 &> /dev/null; then
-    echo -e "${RED}Error: Python 3 is required but not installed.${NC}"
-    echo -e "Install it from https://www.python.org/downloads/"
+    echo -e "${RED}Error: Se requiere Python 3 pero no esta instalado.${NC}"
+    echo -e "Instalalo desde https://www.python.org/downloads/"
     exit 1
 fi
 
 PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-echo -e "  ${GREEN}✓${NC} Python ${PYTHON_VERSION} found"
+echo -e "  ${GREEN}✓${NC} Python ${PYTHON_VERSION} encontrado"
 
-# Clone or update
+# Clonar o actualizar
 if [ -d "$INSTALL_DIR" ]; then
-    echo -e "  ${CYAN}→${NC} Updating existing installation..."
+    echo -e "  ${CYAN}→${NC} Actualizando instalacion existente..."
     cd "$INSTALL_DIR"
     git pull --quiet
 else
-    echo -e "  ${CYAN}→${NC} Cloning repository..."
+    echo -e "  ${CYAN}→${NC} Clonando repositorio..."
     git clone --quiet https://github.com/dev-gaspar/jobhunter.git "$INSTALL_DIR"
     cd "$INSTALL_DIR"
 fi
 
-echo -e "  ${GREEN}✓${NC} Repository ready"
+echo -e "  ${GREEN}✓${NC} Repositorio listo"
 
-# Install Python dependencies
-echo -e "  ${CYAN}→${NC} Installing dependencies..."
+# Instalar dependencias de Python
+echo -e "  ${CYAN}→${NC} Instalando dependencias..."
 python3 -m pip install --quiet rich requests playwright reportlab 2>/dev/null
 python3 -m playwright install chromium --quiet 2>/dev/null || python3 -m playwright install chromium
 
-echo -e "  ${GREEN}✓${NC} Dependencies installed"
+echo -e "  ${GREEN}✓${NC} Dependencias instaladas"
 
-# Create directories
+# Crear directorios
 mkdir -p output/cvs output/logs .session
 
-echo -e "  ${GREEN}✓${NC} Directories created"
+echo -e "  ${GREEN}✓${NC} Directorios creados"
 
-# Create global CLI wrapper
-echo -e "  ${CYAN}→${NC} Installing 'jobhunter' command..."
+# Crear comando global
+echo -e "  ${CYAN}→${NC} Instalando comando 'jobhunter'..."
 
 WRAPPER="${BIN_DIR}/jobhunter"
 cat > "$WRAPPER" << SCRIPT
@@ -77,12 +77,12 @@ exec python3 "${INSTALL_DIR}/job.py" "\$@"
 SCRIPT
 chmod +x "$WRAPPER"
 
-echo -e "  ${GREEN}✓${NC} CLI installed at ${WRAPPER}"
+echo -e "  ${GREEN}✓${NC} CLI instalado en ${WRAPPER}"
 
-# Check if BIN_DIR is in PATH
+# Verificar si BIN_DIR esta en el PATH
 if ! echo "$PATH" | tr ':' '\n' | grep -qx "$BIN_DIR"; then
     echo ""
-    echo -e "  ${CYAN}→${NC} Adding ${BIN_DIR} to PATH..."
+    echo -e "  ${CYAN}→${NC} Agregando ${BIN_DIR} al PATH..."
 
     SHELL_NAME=$(basename "$SHELL")
     if [ "$SHELL_NAME" = "zsh" ]; then
@@ -99,15 +99,15 @@ if ! echo "$PATH" | tr ':' '\n' | grep -qx "$BIN_DIR"; then
         echo "export PATH=\"${BIN_DIR}:\$PATH\"" >> "$RC_FILE"
     fi
 
-    echo -e "  ${GREEN}✓${NC} Added to ${RC_FILE} (restart terminal or run: source ${RC_FILE})"
+    echo -e "  ${GREEN}✓${NC} Agregado a ${RC_FILE} (reinicia la terminal o ejecuta: source ${RC_FILE})"
 fi
 
 echo ""
-echo -e "${GREEN}${BOLD}Installation complete!${NC}"
+echo -e "${GREEN}${BOLD}Instalacion completa!${NC}"
 echo ""
-echo -e "  ${BOLD}Get started:${NC}"
-echo -e "  ${CYAN}jobhunter setup${NC}                    # Configure API keys and profile"
-echo -e "  ${CYAN}jobhunter login${NC}                    # Login to LinkedIn"
-echo -e "  ${CYAN}jobhunter --test your@email.com${NC}    # Test run"
-echo -e "  ${CYAN}jobhunter run${NC}                      # Production mode"
+echo -e "  ${BOLD}Primeros pasos:${NC}"
+echo -e "  ${CYAN}jobhunter setup${NC}                    # Configurar API keys y perfil"
+echo -e "  ${CYAN}jobhunter login${NC}                    # Iniciar sesion en LinkedIn"
+echo -e "  ${CYAN}jobhunter --test tu@email.com${NC}      # Modo prueba"
+echo -e "  ${CYAN}jobhunter run${NC}                      # Modo produccion"
 echo ""
