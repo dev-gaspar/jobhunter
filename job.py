@@ -4,12 +4,12 @@ JobHunter AI v1.0
 Automated LinkedIn Job Search + AI CV Generation + Auto Apply
 
 Usage:
-    python job.py                   First run = setup wizard, then search
-    python job.py --test <email>    Test mode (sends to your email)
-    python job.py run               Production mode (sends to recruiters)
-    python job.py login             Re-login to LinkedIn
-    python job.py status            View config and stats
-    python job.py setup             Re-run setup wizard
+    jobhunter                       First run = setup wizard, then search
+    jobhunter --test <email>        Test mode (sends to your email)
+    jobhunter run                   Production mode (sends to recruiters)
+    jobhunter login                 Re-login to LinkedIn
+    jobhunter status                View config and stats
+    jobhunter setup                 Re-run setup wizard
 """
 import json, os, sys, re, time, smtplib, subprocess, shutil, requests, base64
 import urllib.parse
@@ -261,7 +261,7 @@ def cmd_setup():
     while True:
         cv = Prompt.ask("   Ruta del CV (.pdf)", default=cfg.get("cv_path", ""))
         if not cv:
-            console.print("   [yellow]Sin CV. Puedes agregarlo despues con 'python job.py setup'[/yellow]")
+            console.print("   [yellow]Sin CV. Puedes agregarlo despues con 'jobhunter setup'[/yellow]")
             break
         if not os.path.exists(cv):
             console.print(f"   [red]Archivo no encontrado: {cv}[/red]")
@@ -345,7 +345,7 @@ SOLO JSON valido.""", b64, "application/pdf")
         f"  Portfolio:  {profile.get('portfolio', '-')}\n"
         f"  LinkedIn:   {profile.get('linkedin', '-')}\n"
         f"  Busquedas:  {len(queries)} queries generadas\n\n"
-        f"[bold]Siguiente paso:[/bold] [cyan]python job.py login[/cyan]",
+        f"[bold]Siguiente paso:[/bold] [cyan]jobhunter login[/cyan]",
         border_style="green", title="JobHunter AI"
     ))
 
@@ -386,8 +386,8 @@ def cmd_login():
 
     console.print("  [green]Sesion de LinkedIn guardada![/green]")
     console.print(f"\n  Ahora puedes buscar empleo:")
-    console.print(f"  [cyan]python job.py --test tu@email.com[/cyan]  (modo prueba)")
-    console.print(f"  [cyan]python job.py run[/cyan]                   (enviar a reclutadores)")
+    console.print(f"  [cyan]jobhunter --test tu@email.com[/cyan]  (modo prueba)")
+    console.print(f"  [cyan]jobhunter run[/cyan]                   (enviar a reclutadores)")
 
 
 # ══════════════════════════════════════════════
@@ -643,10 +643,10 @@ def cmd_run(test_email=None, time_filter="24h"):
     kb = load_kb()
 
     if not is_configured():
-        console.print("[red]Falta configuracion. Ejecuta:[/red] [cyan]python job.py setup[/cyan]")
+        console.print("[red]Falta configuracion. Ejecuta:[/red] [cyan]jobhunter setup[/cyan]")
         return
     if not os.path.exists(SESSION_DIR):
-        console.print("[red]No hay sesion LinkedIn. Ejecuta:[/red] [cyan]python job.py login[/cyan]")
+        console.print("[red]No hay sesion LinkedIn. Ejecuta:[/red] [cyan]jobhunter login[/cyan]")
         return
 
     console.print(BANNER)
@@ -686,7 +686,7 @@ def cmd_run(test_email=None, time_filter="24h"):
         page.wait_for_timeout(4000)
 
         if "login" in page.url or "signin" in page.url:
-            console.print("  [red]Sesion expirada. Ejecuta:[/red] [cyan]python job.py login[/cyan]")
+            console.print("  [red]Sesion expirada. Ejecuta:[/red] [cyan]jobhunter login[/cyan]")
             browser.close(); return
 
         with Progress(
@@ -892,21 +892,21 @@ def cmd_help():
     console.print(BANNER)
     console.print(Panel(
         "[bold]Comandos disponibles:[/bold]\n\n"
-        "  [cyan]python job.py setup[/cyan]\n"
+        "  [cyan]jobhunter setup[/cyan]\n"
         "    Configuracion inicial: API key, Gmail, CV, preferencias.\n"
         "    Ejecuta esto la primera vez o para cambiar tu configuracion.\n\n"
-        "  [cyan]python job.py login[/cyan]\n"
+        "  [cyan]jobhunter login[/cyan]\n"
         "    Abre Chrome para iniciar sesion en LinkedIn.\n"
         "    La sesion se guarda y no necesitas volver a hacerlo.\n\n"
-        "  [cyan]python job.py --test email@test.com[/cyan]\n"
+        "  [cyan]jobhunter --test email@test.com[/cyan]\n"
         "    Modo prueba. Busca ofertas y envia todo a TU correo.\n"
         "    Incluye info del reclutador en cada email para referencia.\n\n"
-        "  [cyan]python job.py run[/cyan]\n"
+        "  [cyan]jobhunter run[/cyan]\n"
         "    Modo produccion. Envia emails directamente a reclutadores.\n"
         "    Solo procesa ofertas que tengan email de contacto.\n\n"
-        "  [cyan]python job.py status[/cyan]\n"
+        "  [cyan]jobhunter status[/cyan]\n"
         "    Muestra tu configuracion actual y estadisticas.\n\n"
-        "  [cyan]python job.py help[/cyan]\n"
+        "  [cyan]jobhunter help[/cyan]\n"
         "    Muestra esta ayuda.\n\n"
         "[bold]Filtro de tiempo:[/bold]\n\n"
         "  Agrega [cyan]--time[/cyan] a cualquier comando de busqueda:\n\n"
@@ -914,8 +914,8 @@ def cmd_help():
         "  [cyan]--time week[/cyan]    Esta semana\n"
         "  [cyan]--time month[/cyan]   Este mes\n\n"
         "  Ejemplos:\n"
-        "  [dim]python job.py --test mi@email.com --time week[/dim]\n"
-        "  [dim]python job.py run --time month[/dim]\n",
+        "  [dim]jobhunter --test mi@email.com --time week[/dim]\n"
+        "  [dim]jobhunter run --time month[/dim]\n",
         border_style="cyan", title="JobHunter AI - Ayuda"
     ))
 
@@ -963,7 +963,7 @@ def main():
     else:
         console.print(BANNER)
         console.print(f"  [red]Comando desconocido: {cmd}[/red]")
-        console.print("  [dim]Usa 'python job.py help' para ver comandos disponibles[/dim]")
+        console.print("  [dim]Usa 'jobhunter help' para ver comandos disponibles[/dim]")
 
 
 if __name__ == "__main__":

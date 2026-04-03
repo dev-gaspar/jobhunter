@@ -44,20 +44,20 @@ Desplegada automaticamente en GitHub Pages: [https://dev-gaspar.github.io/jobhun
 ## Comandos
 
 ```
-python job.py setup                          Configuracion inicial
-python job.py login                          Iniciar sesion en LinkedIn
-python job.py --test email@test.com          Modo prueba (envia a tu correo)
-python job.py run                            Modo produccion (envia a reclutadores)
-python job.py status                         Ver configuracion y estadisticas
-python job.py help                           Ver ayuda completa
+jobhunter setup                          Configuracion inicial
+jobhunter login                          Iniciar sesion en LinkedIn
+jobhunter --test email@test.com          Modo prueba (envia a tu correo)
+jobhunter run                            Modo produccion (envia a reclutadores)
+jobhunter status                         Ver configuracion y estadisticas
+jobhunter help                           Ver ayuda completa
 ```
 
 ### Filtro de tiempo
 
 ```
-python job.py --test email@test.com --time 24h      Ultimas 24 horas (por defecto)
-python job.py --test email@test.com --time week      Esta semana
-python job.py run --time month                       Este mes
+jobhunter --test email@test.com --time 24h      Ultimas 24 horas (por defecto)
+jobhunter --test email@test.com --time week      Esta semana
+jobhunter run --time month                       Este mes
 ```
 
 ## Como esta hecho (bajo nivel)
@@ -125,4 +125,4 @@ Los tres agentes usan `gemini-2.0-flash` via HTTP POST directo (sin SDK). Cada l
 - reportlab (PDFs)
 - rich (interfaz CLI)
 
-Se instalan automaticamente la primera vez que ejecutas `python job.py`.
+Se instalan automaticamente la primera vez que ejecutas `jobhunter`.
