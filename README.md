@@ -10,12 +10,13 @@ Funciona para cualquier sector: tecnologia, marketing, ventas, diseno, administr
 curl -sSL https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.sh | bash
 ```
 
-O manualmente:
+Esto instala el comando `jobhunter` globalmente. Despues solo escribe:
 
 ```bash
-git clone https://github.com/dev-gaspar/jobhunter.git
-cd jobhunter
-python job.py setup
+jobhunter setup      # Configurar API keys y perfil
+jobhunter login      # Login en LinkedIn
+jobhunter --test tu@email.com   # Modo prueba
+jobhunter run        # Modo produccion
 ```
 
 ### Landing page (Docker)

@@ -20,9 +20,16 @@ echo -e "${NC}"
 echo -e "${DIM}  AI-Powered Job Search & Auto Apply  |  Installer${NC}"
 echo ""
 
-INSTALL_DIR="${JOBHUNTER_DIR:-$HOME/jobhunter}"
+INSTALL_DIR="${JOBHUNTER_DIR:-$HOME/.jobhunter}"
+BIN_DIR="/usr/local/bin"
 
-echo -e "${BOLD}Installing JobHunter AI to ${INSTALL_DIR}${NC}"
+# Fallback to ~/.local/bin if no sudo access
+if [ ! -w "$BIN_DIR" ] && [ "$(id -u)" -ne 0 ]; then
+    BIN_DIR="$HOME/.local/bin"
+    mkdir -p "$BIN_DIR"
+fi
+
+echo -e "${BOLD}Installing JobHunter AI${NC}"
 echo ""
 
 # Check Python
@@ -60,12 +67,47 @@ mkdir -p output/cvs output/logs .session
 
 echo -e "  ${GREEN}✓${NC} Directories created"
 
+# Create global CLI wrapper
+echo -e "  ${CYAN}→${NC} Installing 'jobhunter' command..."
+
+WRAPPER="${BIN_DIR}/jobhunter"
+cat > "$WRAPPER" << SCRIPT
+#!/bin/bash
+exec python3 "${INSTALL_DIR}/job.py" "\$@"
+SCRIPT
+chmod +x "$WRAPPER"
+
+echo -e "  ${GREEN}✓${NC} CLI installed at ${WRAPPER}"
+
+# Check if BIN_DIR is in PATH
+if ! echo "$PATH" | tr ':' '\n' | grep -qx "$BIN_DIR"; then
+    echo ""
+    echo -e "  ${CYAN}→${NC} Adding ${BIN_DIR} to PATH..."
+
+    SHELL_NAME=$(basename "$SHELL")
+    if [ "$SHELL_NAME" = "zsh" ]; then
+        RC_FILE="$HOME/.zshrc"
+    elif [ "$SHELL_NAME" = "fish" ]; then
+        RC_FILE="$HOME/.config/fish/config.fish"
+    else
+        RC_FILE="$HOME/.bashrc"
+    fi
+
+    if [ "$SHELL_NAME" = "fish" ]; then
+        echo "set -gx PATH ${BIN_DIR} \$PATH" >> "$RC_FILE"
+    else
+        echo "export PATH=\"${BIN_DIR}:\$PATH\"" >> "$RC_FILE"
+    fi
+
+    echo -e "  ${GREEN}✓${NC} Added to ${RC_FILE} (restart terminal or run: source ${RC_FILE})"
+fi
+
 echo ""
 echo -e "${GREEN}${BOLD}Installation complete!${NC}"
 echo ""
 echo -e "  ${BOLD}Get started:${NC}"
-echo -e "  ${CYAN}cd ${INSTALL_DIR}${NC}"
-echo -e "  ${CYAN}python3 job.py setup${NC}    # Configure API keys and profile"
-echo -e "  ${CYAN}python3 job.py login${NC}    # Login to LinkedIn"
-echo -e "  ${CYAN}python3 job.py --test your@email.com${NC}  # Test run"
+echo -e "  ${CYAN}jobhunter setup${NC}                    # Configure API keys and profile"
+echo -e "  ${CYAN}jobhunter login${NC}                    # Login to LinkedIn"
+echo -e "  ${CYAN}jobhunter --test your@email.com${NC}    # Test run"
+echo -e "  ${CYAN}jobhunter run${NC}                      # Production mode"
 echo ""
