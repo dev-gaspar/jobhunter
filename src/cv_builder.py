@@ -2,7 +2,7 @@
 CV PDF Builder - Generates professional PDF CVs using ReportLab
 """
 
-import os
+import os, re
 from datetime import datetime
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
@@ -27,9 +27,25 @@ TEXT_LIGHT = HexColor("#555555")
 LINE_COLOR = HexColor("#cccccc")
 
 
+def _clean_markdown(text: str) -> str:
+    """Remove all markdown formatting from text."""
+    t = str(text)
+    t = re.sub(r'\*\*\*(.+?)\*\*\*', r'\1', t)  # ***bold italic***
+    t = re.sub(r'\*\*(.+?)\*\*', r'\1', t)        # **bold**
+    t = re.sub(r'\*(.+?)\*', r'\1', t)             # *italic*
+    t = re.sub(r'__(.+?)__', r'\1', t)             # __bold__
+    t = re.sub(r'_(.+?)_', r'\1', t)               # _italic_
+    t = re.sub(r'`(.+?)`', r'\1', t)               # `code`
+    t = re.sub(r'^#{1,6}\s+', '', t, flags=re.MULTILINE)  # # headers
+    t = re.sub(r'^\s*[-*+]\s+', '', t, flags=re.MULTILINE)  # - list items
+    t = re.sub(r'\[(.+?)\]\(.+?\)', r'\1', t)      # [link](url)
+    return t
+
+
 def _safe(text: str) -> str:
-    """Escape XML special chars for ReportLab Paragraph."""
-    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    """Clean markdown and escape XML special chars for ReportLab Paragraph."""
+    t = _clean_markdown(text)
+    return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def build_styles():

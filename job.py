@@ -604,6 +604,7 @@ Tu trabajo es tomar el perfil del candidato y REESCRIBIRLO para que encaje perfe
 Esto funciona para CUALQUIER tipo de trabajo: tecnologia, marketing, ventas, diseno, administracion, salud, educacion, etc.
 
 REGLAS CRITICAS:
+- TEXTO PLANO UNICAMENTE. PROHIBIDO usar markdown: nada de **negritas**, *italicas*, `codigo`, # encabezados, ni ningun formato. Solo texto limpio.
 - ESPAÑOL NEUTRO LATINOAMERICANO (sin jerga regional)
 - Usa la MISMA TERMINOLOGIA de la oferta. Si la oferta dice "Community Manager", el CV dice "Community Manager". Si dice "Backend Developer", dice "Backend Developer".
 - NO traduzcas terminos que en la industria se usan en su idioma original
