@@ -193,8 +193,10 @@ New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
 $WrapperContent = "@echo off`r`n$py `"$InstallDir\job.py`" %*"
 [System.IO.File]::WriteAllText("$BinDir\jobhunter.cmd", $WrapperContent)
 
-$WrapperPs1Content = "& $py `"$InstallDir\job.py`" @args"
-[System.IO.File]::WriteAllText("$BinDir\jobhunter.ps1", $WrapperPs1Content)
+# Eliminar .ps1 si existe de versiones anteriores (causa error de ExecutionPolicy)
+if (Test-Path "$BinDir\jobhunter.ps1") {
+    Remove-Item "$BinDir\jobhunter.ps1" -Force
+}
 
 # Agregar al PATH del usuario si no esta
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
