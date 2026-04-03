@@ -1,0 +1,25 @@
+# Sensitive config (contains API keys and passwords)
+config.json
+
+# Knowledge base (personal application history)
+knowledge.json
+
+# Session data
+.session/
+
+# Generated output
+output/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Claude
+.claude/

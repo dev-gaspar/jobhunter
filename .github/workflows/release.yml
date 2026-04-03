@@ -1,0 +1,32 @@
+name: Release Installer
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate install script
+        run: bash -n install.sh
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: install.sh
+          generate_release_notes: true
+          body: |
+            ## Quick Install
+
+            ```bash
+            curl -sSL https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.sh | bash
+            ```
