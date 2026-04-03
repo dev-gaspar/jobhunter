@@ -48,6 +48,15 @@ from rich import print as rprint
 from playwright.sync_api import sync_playwright
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+GEMINI_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-pro",
+    "gemini-3-flash-preview",
+    "gemini-3.1-pro-preview",
+    "gemini-3.1-flash-lite-preview",
+]
 sys.path.insert(0, BASE_DIR)
 from src.cv_builder import generate_cv_pdf, get_cv_filename
 
@@ -119,7 +128,8 @@ def was_already_applied(kb, company, job_title, cooldown_days=30):
 # GEMINI
 # ══════════════════════════════════════════════
 def gemini_url(cfg):
-    return f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={cfg['gemini_api_key']}"
+    model = cfg.get("gemini_model", "gemini-2.5-flash")
+    return f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={cfg['gemini_api_key']}"
 
 def _gemini_request(url, payload, max_retries=3):
     """Make a Gemini API request with retry + exponential backoff for rate limits."""
@@ -222,13 +232,31 @@ def cmd_setup():
             continue
         with console.status("   Verificando..."):
             try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}"
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
                 requests.post(url, json={"contents":[{"parts":[{"text":"test"}]}]}, timeout=10).raise_for_status()
                 console.print("   [green]Valida[/green]")
                 cfg["gemini_api_key"] = key
                 break
             except:
                 console.print("   [red]API key invalida. Intentalo de nuevo.[/red]")
+
+    # 1b. Modelo de Gemini
+    console.print(f"\n[bold cyan]   [/bold cyan] [bold]Modelo de Gemini[/bold]")
+    current_model = cfg.get("gemini_model", "gemini-2.5-flash")
+    for i, m in enumerate(GEMINI_MODELS, 1):
+        marker = " [green](actual)[/green]" if m == current_model else ""
+        console.print(f"   [cyan]{i}.[/cyan] {m}{marker}")
+    while True:
+        choice = Prompt.ask("   Selecciona modelo", default=str(GEMINI_MODELS.index(current_model) + 1 if current_model in GEMINI_MODELS else 1))
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(GEMINI_MODELS):
+                cfg["gemini_model"] = GEMINI_MODELS[idx]
+                console.print(f"   [green]Modelo: {GEMINI_MODELS[idx]}[/green]")
+                break
+        except ValueError:
+            pass
+        console.print(f"   [red]Selecciona un numero del 1 al {len(GEMINI_MODELS)}[/red]")
 
     # 2. Gmail
     console.print(f"\n[bold cyan]2.[/bold cyan] [bold]Correo Gmail + App Password[/bold]")
@@ -403,6 +431,7 @@ def cmd_status():
     table.add_column("")
 
     table.add_row("Gemini API", "[green]OK[/green]" if cfg.get("gemini_api_key") else "[red]No configurada[/red]")
+    table.add_row("Modelo", cfg.get("gemini_model", "gemini-2.5-flash"))
     table.add_row("Gmail", cfg.get("smtp_email", "[red]No configurado[/red]"))
     table.add_row("SMTP", "[green]OK[/green]" if cfg.get("smtp_password") else "[red]No configurado[/red]")
     table.add_row("CV", cfg.get("cv_path") or "[yellow]No configurado[/yellow]")
@@ -641,7 +670,7 @@ JSON (sin markdown, sin bloques de codigo):
 # ══════════════════════════════════════════════
 # RUN
 # ══════════════════════════════════════════════
-def cmd_run(test_email=None, time_filter="24h"):
+def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
     cfg = load_config()
     kb = load_kb()
 
@@ -789,6 +818,30 @@ def cmd_run(test_email=None, time_filter="24h"):
     # Use only offers with valid email for Phase 3
     offers = offers_with_email
 
+    # ── Seleccion de ofertas (si no es modo auto) ──
+    if not auto_apply:
+        console.print()
+        console.print("[bold]Selecciona las ofertas a las que quieres aplicar:[/bold]")
+        console.print("[dim]  Escribe los numeros separados por coma (ej: 1,3,5), 'all' para todas, o 'q' para cancelar[/dim]")
+        while True:
+            choice = Prompt.ask("  Aplicar a")
+            if choice.strip().lower() == 'q':
+                console.print("  [yellow]Cancelado.[/yellow]")
+                return
+            if choice.strip().lower() in ('all', 'todas', '*'):
+                break
+            try:
+                indices = [int(x.strip()) - 1 for x in choice.split(",")]
+                selected = [offers[i] for i in indices if 0 <= i < len(offers)]
+                if selected:
+                    offers = selected
+                    console.print(f"  [cyan]Seleccionadas: {len(offers)} ofertas[/cyan]")
+                    break
+                else:
+                    console.print(f"  [red]Ningun numero valido. Rango: 1-{len(offers)}[/red]")
+            except (ValueError, IndexError):
+                console.print(f"  [red]Formato invalido. Usa numeros separados por coma (1-{len(offers)}), 'all' o 'q'[/red]")
+
     # ── Phase 3: Generate & Send ──
     console.print(Rule("[bold]Fase 3: Generando CVs y enviando[/bold]"))
     sent = 0
@@ -911,14 +964,16 @@ def cmd_help():
         "    Muestra tu configuracion actual y estadisticas.\n\n"
         "  [cyan]jobhunter help[/cyan]\n"
         "    Muestra esta ayuda.\n\n"
-        "[bold]Filtro de tiempo:[/bold]\n\n"
-        "  Agrega [cyan]--time[/cyan] a cualquier comando de busqueda:\n\n"
-        "  [cyan]--time 24h[/cyan]     Ultimas 24 horas [dim](por defecto)[/dim]\n"
-        "  [cyan]--time week[/cyan]    Esta semana\n"
-        "  [cyan]--time month[/cyan]   Este mes\n\n"
+        "[bold]Opciones:[/bold]\n\n"
+        "  [cyan]--time[/cyan]    Filtro de tiempo:\n"
+        "            [cyan]24h[/cyan]    Ultimas 24 horas [dim](por defecto)[/dim]\n"
+        "            [cyan]week[/cyan]   Esta semana\n"
+        "            [cyan]month[/cyan]  Este mes\n\n"
+        "  [cyan]--auto[/cyan]   Enviar a todas las ofertas sin preguntar\n"
+        "          [dim](por defecto te deja seleccionar a cuales aplicar)[/dim]\n\n"
         "  Ejemplos:\n"
         "  [dim]jobhunter --test mi@email.com --time week[/dim]\n"
-        "  [dim]jobhunter run --time month[/dim]\n",
+        "  [dim]jobhunter run --time month --auto[/dim]\n",
         border_style="cyan", title="JobHunter AI - Ayuda"
     ))
 
@@ -950,6 +1005,7 @@ def main():
 
     cmd = sys.argv[1]
     tf = parse_time_filter(sys.argv)
+    auto = "--auto" in sys.argv
 
     if cmd in ("setup",):
         cmd_setup()
@@ -960,9 +1016,9 @@ def main():
     elif cmd in ("help", "--help", "-h"):
         cmd_help()
     elif cmd == "--test" and len(sys.argv) > 2:
-        cmd_run(test_email=sys.argv[2], time_filter=tf)
+        cmd_run(test_email=sys.argv[2], time_filter=tf, auto_apply=auto)
     elif cmd in ("run",):
-        cmd_run(time_filter=tf)
+        cmd_run(time_filter=tf, auto_apply=auto)
     else:
         console.print(BANNER)
         console.print(f"  [red]Comando desconocido: {cmd}[/red]")
