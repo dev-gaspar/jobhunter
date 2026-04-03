@@ -1,8 +1,6 @@
 # JobHunter AI - Instalador para Windows
 # Ejecutar: irm https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.ps1 | iex
 
-$ErrorActionPreference = "Stop"
-
 Write-Host ""
 Write-Host "       ██╗ ██████╗ ██████╗ ██╗  ██╗██╗   ██╗███╗   ██╗████████╗███████╗██████╗ " -ForegroundColor Cyan
 Write-Host "       ██║██╔═══██╗██╔══██╗██║  ██║██║   ██║████╗  ██║╚══██╔══╝██╔════╝██╔══██╗" -ForegroundColor Cyan
@@ -20,42 +18,36 @@ Write-Host "Instalando JobHunter AI" -ForegroundColor White
 Write-Host ""
 
 # Verificar Python
-try {
-    $pythonVersion = python --version 2>&1
-    Write-Host "  ✓ $pythonVersion encontrado" -ForegroundColor Green
-} catch {
-    try {
-        $pythonVersion = python3 --version 2>&1
-        Write-Host "  ✓ $pythonVersion encontrado" -ForegroundColor Green
-    } catch {
-        Write-Host "  ✗ Error: Se requiere Python 3 pero no esta instalado." -ForegroundColor Red
-        Write-Host "    Instalalo desde https://www.python.org/downloads/" -ForegroundColor Yellow
-        exit 1
-    }
+$py = $null
+if (Get-Command python -ErrorAction SilentlyContinue) { $py = "python" }
+elseif (Get-Command python3 -ErrorAction SilentlyContinue) { $py = "python3" }
+
+if (-not $py) {
+    Write-Host "  x Error: Se requiere Python 3 pero no esta instalado." -ForegroundColor Red
+    Write-Host "    Instalalo desde https://www.python.org/downloads/" -ForegroundColor Yellow
+    return
 }
 
-# Detectar comando python
-$py = if (Get-Command python -ErrorAction SilentlyContinue) { "python" } else { "python3" }
+$pythonVersion = & $py --version 2>&1
+Write-Host "  ✓ $pythonVersion encontrado" -ForegroundColor Green
 
 # Clonar o actualizar
 if (Test-Path $InstallDir) {
     Write-Host "  → Actualizando instalacion existente..." -ForegroundColor Cyan
     Push-Location $InstallDir
-    git pull --quiet
+    git pull --quiet 2>&1 | Out-Null
     Pop-Location
 } else {
     Write-Host "  → Clonando repositorio..." -ForegroundColor Cyan
-    git clone --quiet https://github.com/dev-gaspar/jobhunter.git $InstallDir
+    git clone --quiet https://github.com/dev-gaspar/jobhunter.git $InstallDir 2>&1 | Out-Null
 }
 
 Write-Host "  ✓ Repositorio listo" -ForegroundColor Green
 
 # Instalar dependencias
 Write-Host "  → Instalando dependencias..." -ForegroundColor Cyan
-$ErrorActionPreference = "SilentlyContinue"
 & $py -m pip install --quiet rich requests playwright reportlab 2>&1 | Out-Null
 & $py -m playwright install chromium 2>&1 | Out-Null
-$ErrorActionPreference = "Stop"
 
 Write-Host "  ✓ Dependencias instaladas" -ForegroundColor Green
 
@@ -72,16 +64,11 @@ Write-Host "  → Instalando comando 'jobhunter'..." -ForegroundColor Cyan
 $BinDir = "$env:USERPROFILE\.jobhunter\bin"
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
 
-$WrapperCmd = "$BinDir\jobhunter.cmd"
-@"
-@echo off
-$py "$InstallDir\job.py" %*
-"@ | Set-Content -Path $WrapperCmd -Encoding ASCII
+$WrapperContent = "@echo off`r`n$py `"$InstallDir\job.py`" %*"
+[System.IO.File]::WriteAllText("$BinDir\jobhunter.cmd", $WrapperContent)
 
-$WrapperPs1 = "$BinDir\jobhunter.ps1"
-@"
-& $py "$InstallDir\job.py" @args
-"@ | Set-Content -Path $WrapperPs1 -Encoding UTF8
+$WrapperPs1Content = "& $py `"$InstallDir\job.py`" @args"
+[System.IO.File]::WriteAllText("$BinDir\jobhunter.ps1", $WrapperPs1Content)
 
 # Agregar al PATH del usuario si no esta
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
