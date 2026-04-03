@@ -1,6 +1,0 @@
-services:
-  web:
-    build: ./web
-    ports:
-      - "3000:80"
-    restart: unless-stopped

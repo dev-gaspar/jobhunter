@@ -27,13 +27,9 @@ jobhunter --test tu@email.com    # Modo prueba
 jobhunter run                    # Modo produccion
 ```
 
-### Landing page (Docker)
+### Landing page
 
-```bash
-docker compose up -d
-```
-
-Abre `http://localhost:3000` para ver la landing page.
+Desplegada automaticamente en GitHub Pages: [https://dev-gaspar.github.io/jobhunter/](https://dev-gaspar.github.io/jobhunter/)
 
 ## Como funciona (alto nivel)
 
