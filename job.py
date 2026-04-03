@@ -429,7 +429,10 @@ TIME_FILTERS = {
 def scrape_posts(page, query, max_scroll=4, time_filter="24h"):
     encoded = urllib.parse.quote(query)
     date_param = TIME_FILTERS.get(time_filter, "past-24h")
-    page.goto(f"https://www.linkedin.com/search/results/content/?keywords={encoded}&datePosted=%5B%22{date_param}%22%5D&sortBy=%5B%22date_posted%22%5D", wait_until="domcontentloaded")
+    try:
+        page.goto(f"https://www.linkedin.com/search/results/content/?keywords={encoded}&datePosted=%5B%22{date_param}%22%5D&sortBy=%5B%22date_posted%22%5D", wait_until="domcontentloaded", timeout=60000)
+    except Exception:
+        return []  # Si timeout, saltar esta query y continuar con la siguiente
     page.wait_for_timeout(5000)
     for _ in range(max_scroll):
         page.evaluate("window.scrollBy(0, 800)")
