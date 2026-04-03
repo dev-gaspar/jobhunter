@@ -60,14 +60,24 @@ if command -v python3 &> /dev/null; then
     PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
     echo -e "  ${GREEN}✓${NC} Python ${PYTHON_VERSION}"
 
-    # pip
+    # pip (auto-instalar si falta)
     if python3 -m pip --version &> /dev/null; then
         echo -e "  ${GREEN}✓${NC} pip disponible"
     else
-        echo -e "  ${RED}✗ pip no encontrado${NC}"
-        echo -e "    ${YELLOW}Instalalo con: python3 -m ensurepip --upgrade${NC}"
-        echo -e "    ${YELLOW}O con: sudo apt install python3-pip  (Debian/Ubuntu)${NC}"
-        OK=false
+        echo -e "  ${YELLOW}→ pip no encontrado, instalando automaticamente...${NC}"
+        python3 -m ensurepip --upgrade 2>/dev/null || true
+        if python3 -m pip --version &> /dev/null; then
+            echo -e "  ${GREEN}✓${NC} pip instalado"
+        else
+            echo -e "  ${RED}✗ No se pudo instalar pip${NC}"
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                echo -e "    ${YELLOW}Instalalo con: brew install python3${NC}"
+            else
+                echo -e "    ${YELLOW}Instalalo con: sudo apt install python3-pip  (Debian/Ubuntu)${NC}"
+                echo -e "    ${YELLOW}               sudo dnf install python3-pip  (Fedora)${NC}"
+            fi
+            OK=false
+        fi
     fi
 else
     echo -e "  ${RED}✗ Python 3 no encontrado${NC}"

@@ -17,6 +17,25 @@ $InstallDir = "$env:USERPROFILE\.jobhunter"
 Write-Host "Instalando JobHunter AI" -ForegroundColor White
 Write-Host ""
 
+# Verificar si winget esta disponible
+$hasWinget = [bool](Get-Command winget -ErrorAction SilentlyContinue)
+
+function Ask-Install($name, $wingetId) {
+    if (-not $hasWinget) {
+        return $false
+    }
+    Write-Host ""
+    $answer = Read-Host "    Quieres instalar $name automaticamente? (s/n)"
+    if ($answer -match '^[sS]') {
+        Write-Host "    Instalando $name con winget..." -ForegroundColor Cyan
+        winget install --id $wingetId --accept-source-agreements --accept-package-agreements 2>&1 | Out-Null
+        # Refrescar PATH de la sesion
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+        return $true
+    }
+    return $false
+}
+
 # ── Verificar requisitos ──
 Write-Host "  Verificando requisitos..." -ForegroundColor DarkGray
 Write-Host ""
@@ -28,8 +47,19 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
     Write-Host "  ✓ Git $gitVersion" -ForegroundColor Green
 } else {
     Write-Host "  ✗ Git no encontrado" -ForegroundColor Red
-    Write-Host "    Instalalo desde: https://git-scm.com/downloads/win" -ForegroundColor Yellow
-    $ok = $false
+    if (Ask-Install "Git" "Git.Git") {
+        if (Get-Command git -ErrorAction SilentlyContinue) {
+            $gitVersion = (git --version) -replace 'git version ', ''
+            Write-Host "  ✓ Git $gitVersion instalado" -ForegroundColor Green
+        } else {
+            Write-Host "  ✗ Git se instalo pero necesitas reiniciar la terminal" -ForegroundColor Yellow
+            Write-Host "    Cierra esta terminal, abre una nueva, y ejecuta el instalador de nuevo" -ForegroundColor Yellow
+            $ok = $false
+        }
+    } else {
+        Write-Host "    Instalalo manualmente: https://git-scm.com/downloads/win" -ForegroundColor Yellow
+        $ok = $false
+    }
 }
 
 # Python
@@ -40,21 +70,45 @@ elseif (Get-Command python3 -ErrorAction SilentlyContinue) { $py = "python3" }
 if ($py) {
     $pythonVersion = & $py --version 2>&1
     Write-Host "  ✓ $pythonVersion" -ForegroundColor Green
+} else {
+    Write-Host "  ✗ Python no encontrado" -ForegroundColor Red
+    if (Ask-Install "Python" "Python.Python.3.12") {
+        # Refrescar y buscar de nuevo
+        if (Get-Command python -ErrorAction SilentlyContinue) { $py = "python" }
+        elseif (Get-Command python3 -ErrorAction SilentlyContinue) { $py = "python3" }
 
-    # pip
+        if ($py) {
+            $pythonVersion = & $py --version 2>&1
+            Write-Host "  ✓ $pythonVersion instalado" -ForegroundColor Green
+        } else {
+            Write-Host "  ✗ Python se instalo pero necesitas reiniciar la terminal" -ForegroundColor Yellow
+            Write-Host "    Cierra esta terminal, abre una nueva, y ejecuta el instalador de nuevo" -ForegroundColor Yellow
+            $ok = $false
+        }
+    } else {
+        Write-Host "    Instalalo manualmente: https://www.python.org/downloads/" -ForegroundColor Yellow
+        Write-Host "    (Marca 'Add Python to PATH' durante la instalacion)" -ForegroundColor Yellow
+        $ok = $false
+    }
+}
+
+# pip (solo si tenemos Python)
+if ($py) {
     $pipCheck = & $py -m pip --version 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  ✓ pip disponible" -ForegroundColor Green
     } else {
-        Write-Host "  ✗ pip no encontrado" -ForegroundColor Red
-        Write-Host "    Ejecuta: $py -m ensurepip --upgrade" -ForegroundColor Yellow
-        $ok = $false
+        Write-Host "  ✗ pip no encontrado, instalando..." -ForegroundColor Yellow
+        & $py -m ensurepip --upgrade 2>&1 | Out-Null
+        $pipCheck2 = & $py -m pip --version 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "  ✓ pip instalado" -ForegroundColor Green
+        } else {
+            Write-Host "  ✗ No se pudo instalar pip" -ForegroundColor Red
+            Write-Host "    Ejecuta manualmente: $py -m ensurepip --upgrade" -ForegroundColor Yellow
+            $ok = $false
+        }
     }
-} else {
-    Write-Host "  ✗ Python no encontrado" -ForegroundColor Red
-    Write-Host "    Instalalo desde: https://www.python.org/downloads/" -ForegroundColor Yellow
-    Write-Host "    (Marca 'Add Python to PATH' durante la instalacion)" -ForegroundColor Yellow
-    $ok = $false
 }
 
 # Chrome o Edge
@@ -75,10 +129,23 @@ if ($chrome) {
     Write-Host "  ✓ $browserName encontrado" -ForegroundColor Green
 } else {
     Write-Host "  ✗ Google Chrome o Microsoft Edge no encontrado" -ForegroundColor Red
-    Write-Host "    Instala uno de estos navegadores:" -ForegroundColor Yellow
-    Write-Host "    Chrome: https://www.google.com/chrome/" -ForegroundColor Yellow
-    Write-Host "    Edge:   https://www.microsoft.com/edge" -ForegroundColor Yellow
-    $ok = $false
+    if (Ask-Install "Google Chrome" "Google.Chrome") {
+        # Verificar de nuevo
+        foreach ($p in $chromePaths) {
+            if (Test-Path $p) { $chrome = $p; break }
+        }
+        if ($chrome) {
+            Write-Host "  ✓ Google Chrome instalado" -ForegroundColor Green
+        } else {
+            Write-Host "  ✗ Chrome se instalo pero no se detecta aun" -ForegroundColor Yellow
+            Write-Host "    Reinicia la terminal y ejecuta el instalador de nuevo" -ForegroundColor Yellow
+            $ok = $false
+        }
+    } else {
+        Write-Host "    Chrome: https://www.google.com/chrome/" -ForegroundColor Yellow
+        Write-Host "    Edge:   https://www.microsoft.com/edge" -ForegroundColor Yellow
+        $ok = $false
+    }
 }
 
 # Si falta algo, parar
