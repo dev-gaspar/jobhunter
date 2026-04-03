@@ -18,28 +18,7 @@ curl -sSL https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.sh
 irm https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.ps1 | iex
 ```
 
-Esto instala el comando `jobhunter` globalmente en tu terminal. Despues solo escribe:
-
-```bash
-jobhunter setup                  # Configurar API keys y perfil
-jobhunter login                  # Iniciar sesion en LinkedIn
-jobhunter --test tu@email.com    # Modo prueba
-jobhunter run                    # Modo produccion
-```
-
-### Landing page
-
-Desplegada automaticamente en GitHub Pages: [https://dev-gaspar.github.io/jobhunter/](https://dev-gaspar.github.io/jobhunter/)
-
-## Como funciona (alto nivel)
-
-1. **Setup**: Configuras tu API key de Gemini, correo Gmail, subes tu CV, y defines que tipo de empleo buscas
-2. **Login**: Inicias sesion en LinkedIn una vez (la sesion se guarda)
-3. **Busqueda**: El sistema busca publicaciones en LinkedIn con tus terminos, expande el texto de cada post, y extrae emails de reclutadores
-4. **Analisis**: Un agente de IA analiza cada publicacion para determinar si es una oferta real y relevante para tu perfil
-5. **CV personalizado**: Otro agente de IA genera un CV en PDF adaptado a cada oferta especifica, reescribiendo tu experiencia y habilidades para que encajen con lo que piden
-6. **Email personalizado**: Un tercer agente escribe un email de aplicacion corto, directo, y humano
-7. **Envio**: Se envia el email con el CV adjunto al reclutador via Gmail SMTP
+Esto instala el comando `jobhunter` globalmente en tu terminal.
 
 ## Comandos
 
@@ -52,6 +31,8 @@ jobhunter status                         Ver configuracion y estadisticas
 jobhunter help                           Ver ayuda completa
 ```
 
+## Opciones
+
 ### Filtro de tiempo
 
 ```
@@ -59,6 +40,51 @@ jobhunter --test email@test.com --time 24h      Ultimas 24 horas (por defecto)
 jobhunter --test email@test.com --time week      Esta semana
 jobhunter run --time month                       Este mes
 ```
+
+### Modo automatico
+
+Por defecto, despues del analisis se muestra una tabla con las ofertas encontradas y puedes elegir a cuales aplicar:
+
+```
+Aplicar a: 1,3,5      Solo esas ofertas
+Aplicar a: all         Todas las ofertas
+Aplicar a: q           Cancelar
+```
+
+Para saltar la seleccion y enviar a todas automaticamente:
+
+```
+jobhunter run --auto
+jobhunter --test mi@email.com --auto
+```
+
+### Modelos de Gemini
+
+Durante `jobhunter setup` puedes elegir el modelo de IA:
+
+| Modelo | Descripcion |
+|--------|-------------|
+| `gemini-2.5-flash` | Rapido y eficiente (por defecto) |
+| `gemini-2.5-flash-lite` | Mas ligero, menor consumo de API |
+| `gemini-2.5-pro` | Mayor calidad, mas lento |
+| `gemini-3-flash-preview` | Ultima generacion, rapido |
+| `gemini-3.1-pro-preview` | Ultima generacion, alta calidad |
+| `gemini-3.1-flash-lite-preview` | Ultima generacion, ligero |
+
+### Filtrado de duplicados
+
+No envia el mismo cargo a la misma empresa si ya se envio en los ultimos 30 dias. Diferentes cargos a la misma empresa si se permiten.
+
+## Como funciona (alto nivel)
+
+1. **Setup**: Configuras tu API key de Gemini, eliges el modelo de IA, correo Gmail, subes tu CV, y defines que tipo de empleo buscas
+2. **Login**: Inicias sesion en LinkedIn una vez (la sesion se guarda)
+3. **Busqueda**: El sistema busca publicaciones en LinkedIn con tus terminos, expande el texto de cada post, y extrae emails de reclutadores
+4. **Analisis**: Un agente de IA analiza cada publicacion para determinar si es una oferta real y relevante para tu perfil
+5. **Seleccion**: Se muestra una tabla con las ofertas encontradas y puedes elegir a cuales aplicar (o usar `--auto` para todas)
+6. **CV personalizado**: Otro agente de IA genera un CV en PDF adaptado a cada oferta especifica, reescribiendo tu experiencia y habilidades para que encajen con lo que piden
+7. **Email personalizado**: Un tercer agente escribe un email de aplicacion corto, directo, y humano
+8. **Envio**: Se envia el email con el CV adjunto al reclutador via Gmail SMTP
 
 ## Como esta hecho (bajo nivel)
 
@@ -69,7 +95,7 @@ El sistema es un script Python (`job.py`) que orquesta 4 componentes:
 ```
 job.py
  ├── Playwright (scraping de LinkedIn)
- ├── Gemini API (3 agentes de IA)
+ ├── Gemini API (3 agentes de IA, modelo configurable)
  ├── ReportLab (generacion de PDFs)
  └── SMTP (envio de emails)
 ```
@@ -93,7 +119,7 @@ Tres agentes especializados, cada uno con su propio system prompt:
 
 **Agente 3 - Email Writer**: Genera un email de aplicacion corto (max 100 palabras), en espanol neutro, texto plano, sin frases de plantilla, con 1-2 logros concretos con numeros.
 
-Los tres agentes usan `gemini-2.0-flash` via HTTP POST directo (sin SDK). Cada llamada tiene reintentos con backoff exponencial para manejar rate limits (429).
+Los tres agentes usan el modelo de Gemini seleccionado durante el setup via HTTP POST directo (sin SDK). Cada llamada tiene reintentos con backoff exponencial para manejar rate limits (429).
 
 ### Generacion de PDFs
 
@@ -111,7 +137,7 @@ Los tres agentes usan `gemini-2.0-flash` via HTTP POST directo (sin SDK). Cada l
 
 ### Almacenamiento
 
-- `config.json`: Configuracion del usuario (API keys, perfil, queries de busqueda)
+- `config.json`: Configuracion del usuario (API keys, modelo, perfil, queries de busqueda)
 - `knowledge.json`: Historial de ejecuciones y aplicaciones enviadas
 - `.session/`: Datos de sesion persistente de Playwright/Chrome
 - `output/cvs/`: CVs generados en PDF
@@ -126,3 +152,7 @@ Los tres agentes usan `gemini-2.0-flash` via HTTP POST directo (sin SDK). Cada l
 - rich (interfaz CLI)
 
 Se instalan automaticamente la primera vez que ejecutas `jobhunter`.
+
+## Landing page
+
+Desplegada automaticamente en GitHub Pages: [https://dev-gaspar.github.io/jobhunter/](https://dev-gaspar.github.io/jobhunter/)
