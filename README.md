@@ -28,6 +28,7 @@ jobhunter login                          Iniciar sesion en LinkedIn
 jobhunter --test email@test.com          Modo prueba (envia a tu correo)
 jobhunter run                            Modo produccion (envia a reclutadores)
 jobhunter status                         Ver configuracion y estadisticas
+jobhunter update                         Actualizar a la ultima version
 jobhunter help                           Ver ayuda completa
 ```
 

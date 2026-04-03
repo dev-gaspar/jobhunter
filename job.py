@@ -446,6 +446,48 @@ def cmd_status():
 
 
 # ══════════════════════════════════════════════
+# UPDATE
+# ══════════════════════════════════════════════
+def cmd_update():
+    console.print(BANNER)
+    console.print(Rule("[bold]Actualizando JobHunter AI[/bold]"))
+    console.print()
+
+    with console.status("  Buscando actualizaciones..."):
+        try:
+            result = subprocess.run(
+                ["git", "-C", BASE_DIR, "pull", "--ff-only"],
+                capture_output=True, text=True, timeout=30
+            )
+        except FileNotFoundError:
+            console.print("  [red]Error: git no esta instalado.[/red]")
+            return
+        except subprocess.TimeoutExpired:
+            console.print("  [red]Error: timeout al conectar con GitHub.[/red]")
+            return
+
+    if result.returncode != 0:
+        console.print(f"  [red]Error al actualizar:[/red] {result.stderr.strip()}")
+        return
+
+    output = result.stdout.strip()
+    if "Already up to date" in output or "Ya esta actualizado" in output:
+        console.print("  [green]Ya tienes la ultima version.[/green]")
+    else:
+        console.print("  [green]Actualizado correctamente![/green]")
+        console.print(f"  [dim]{output}[/dim]")
+
+    # Actualizar dependencias por si hay nuevas
+    with console.status("  Verificando dependencias..."):
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--quiet", "rich", "requests", "playwright", "reportlab"],
+            capture_output=True
+        )
+
+    console.print("  [green]Listo![/green]")
+
+
+# ══════════════════════════════════════════════
 # SCRAPING (headless)
 # ══════════════════════════════════════════════
 # LinkedIn time filter URL params
@@ -963,6 +1005,8 @@ def cmd_help():
         "    a cuales aplicar antes de generar CVs y enviar.\n\n"
         "  [cyan]jobhunter status[/cyan]\n"
         "    Muestra tu configuracion, modelo de IA, y estadisticas.\n\n"
+        "  [cyan]jobhunter update[/cyan]\n"
+        "    Actualiza a la ultima version desde GitHub.\n\n"
         "  [cyan]jobhunter help[/cyan]\n"
         "    Muestra esta ayuda.\n\n"
         "[bold]Opciones:[/bold]\n\n"
@@ -1035,6 +1079,8 @@ def main():
         cmd_login()
     elif cmd in ("status",):
         cmd_status()
+    elif cmd in ("update",):
+        cmd_update()
     elif cmd in ("help", "--help", "-h"):
         cmd_help()
     elif cmd == "--test" and len(sys.argv) > 2:
