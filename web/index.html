@@ -258,6 +258,51 @@
 
         .copy-btn svg { width: 16px; height: 16px; }
 
+        /* ── OS Tabs ── */
+        .os-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 0;
+            max-width: 520px;
+            width: 100%;
+        }
+
+        .os-tab {
+            flex: 1;
+            padding: 0.6rem 1rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-bottom: none;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+        }
+
+        .os-tab:first-child { border-radius: 10px 0 0 0; }
+        .os-tab:last-child { border-radius: 0 10px 0 0; }
+
+        .os-tab.active {
+            background: var(--bg-secondary);
+            color: var(--text);
+            border-bottom-color: var(--bg-secondary);
+        }
+
+        .os-tab:not(.active):hover { color: var(--text-secondary); }
+
+        .os-tab svg { width: 14px; height: 14px; }
+
+        .install-box {
+            border-radius: 0 0 10px 10px;
+            border-top: none;
+        }
+
         /* ── Terminal ── */
         .terminal {
             max-width: 720px;
@@ -516,12 +561,28 @@
         </a>
     </div>
 
-    <div class="install-box" id="install">
-        <span class="prompt">$</span>
-        <code id="install-cmd">curl -sSL https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.sh | bash</code>
-        <button class="copy-btn" onclick="copyInstall()" title="Copiar">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-        </button>
+    <div id="install" style="max-width:520px;width:100%">
+        <div class="os-tabs">
+            <button class="os-tab active" onclick="switchOS('mac')">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+                macOS
+            </button>
+            <button class="os-tab" onclick="switchOS('linux')">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.368 1.884 1.43.199.023.395-.003.564-.068a.468.468 0 00.292-.032c.218-.032.439-.2.574-.381.202-.27.328-.611.4-.934.075-.392.07-.773.003-1.075-.155-.693-.675-1.116-.655-1.737.039-.626.326-1.458.596-2.291.273-.831.547-1.593.6-2.204.052-.64-.064-1.089-.434-1.397-.18-.166-.415-.257-.655-.286-.12-.015-.24-.02-.36-.017-.313.013-.639.105-.955.246-.43.197-.826.494-1.185.796-.358.302-.672.602-.846.746-.105.09-.186.143-.23.161-.043.02-.091.013-.152-.023-.12-.074-.241-.252-.373-.503-.132-.258-.262-.595-.372-.953-.11-.358-.2-.74-.253-1.132-.054-.392-.074-.798-.06-1.2.014-.408.053-.812.111-1.202.058-.392.134-.773.232-1.135.198-.741.466-1.41.806-1.961.342-.548.756-.977 1.204-1.22a2.92 2.92 0 011.57-.34c.376.025.754.117 1.065.294.315.179.564.434.72.752.197.4.257.885.151 1.396-.105.516-.379 1.058-.79 1.582-.414.526-.963 1.029-1.611 1.479-.648.448-1.394.84-2.168 1.158l-.012.006c-.043.018-.088.037-.133.054a8.85 8.85 0 00-.143.06l-.012.004a.244.244 0 00-.071.04.164.164 0 00-.04.056c-.008.023-.013.047-.006.075a.164.164 0 00.048.078.35.35 0 00.181.08c.238.043.57.004.942-.113.372-.116.787-.31 1.201-.56a10.24 10.24 0 001.573-1.15c.568-.5 1.067-1.072 1.452-1.685.387-.61.66-1.265.78-1.909.119-.643.078-1.278-.15-1.84-.227-.556-.614-1.04-1.108-1.386a3.765 3.765 0 00-1.453-.497 4.165 4.165 0 00-1.714.108z"/></svg>
+                Linux
+            </button>
+            <button class="os-tab" onclick="switchOS('windows')">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+                Windows
+            </button>
+        </div>
+        <div class="install-box">
+            <span class="prompt" id="install-prompt">$</span>
+            <code id="install-cmd">curl -sSL https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.sh | bash</code>
+            <button class="copy-btn" onclick="copyInstall()" title="Copiar">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+        </div>
     </div>
 
     <!-- Terminal -->
@@ -667,8 +728,40 @@
 </footer>
 
 <script>
+const commands = {
+    mac: { prompt: '$', cmd: 'curl -sSL https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.sh | bash' },
+    linux: { prompt: '$', cmd: 'curl -sSL https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.sh | bash' },
+    windows: { prompt: '>', cmd: 'irm https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.ps1 | iex' }
+};
+
+let currentOS = 'mac';
+
+function switchOS(os) {
+    currentOS = os;
+    document.getElementById('install-cmd').textContent = commands[os].cmd;
+    document.getElementById('install-prompt').textContent = commands[os].prompt;
+    document.querySelectorAll('.os-tab').forEach(t => t.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+}
+
+// Auto-detectar OS del visitante
+(function() {
+    const ua = navigator.userAgent.toLowerCase();
+    if (ua.includes('win')) switchAndClick('windows');
+    else if (ua.includes('linux') && !ua.includes('android')) switchAndClick('linux');
+    function switchAndClick(os) {
+        const tabs = document.querySelectorAll('.os-tab');
+        const idx = os === 'mac' ? 0 : os === 'linux' ? 1 : 2;
+        tabs.forEach(t => t.classList.remove('active'));
+        tabs[idx].classList.add('active');
+        currentOS = os;
+        document.getElementById('install-cmd').textContent = commands[os].cmd;
+        document.getElementById('install-prompt').textContent = commands[os].prompt;
+    }
+})();
+
 function copyInstall() {
-    const cmd = 'curl -sSL https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.sh | bash';
+    const cmd = commands[currentOS].cmd;
     navigator.clipboard.writeText(cmd).then(() => {
         const btn = document.querySelector('.copy-btn');
         btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';

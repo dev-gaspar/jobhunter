@@ -6,8 +6,16 @@ Funciona para cualquier sector: tecnologia, marketing, ventas, diseno, administr
 
 ## Instalacion rapida
 
+**macOS / Linux:**
+
 ```bash
 curl -sSL https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.sh | bash
+```
+
+**Windows (PowerShell):**
+
+```powershell
+irm https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.ps1 | iex
 ```
 
 Esto instala el comando `jobhunter` globalmente en tu terminal. Despues solo escribe:

@@ -15,18 +15,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate install script
+      - name: Validar install.sh
         run: bash -n install.sh
 
-      - name: Create Release
+      - name: Validar install.ps1
+        run: test -f install.ps1
+
+      - name: Crear Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: install.sh
+          files: |
+            install.sh
+            install.ps1
           generate_release_notes: true
           body: |
-            ## Quick Install
+            ## Instalacion rapida
 
+            **macOS / Linux:**
             ```bash
             curl -sSL https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.sh | bash
+            ```
+
+            **Windows (PowerShell):**
+            ```powershell
+            irm https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.ps1 | iex
             ```
