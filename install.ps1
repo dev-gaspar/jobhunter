@@ -52,8 +52,10 @@ Write-Host "  ✓ Repositorio listo" -ForegroundColor Green
 
 # Instalar dependencias
 Write-Host "  → Instalando dependencias..." -ForegroundColor Cyan
-& $py -m pip install --quiet rich requests playwright reportlab 2>$null
-& $py -m playwright install chromium 2>$null
+$ErrorActionPreference = "SilentlyContinue"
+& $py -m pip install --quiet rich requests playwright reportlab 2>&1 | Out-Null
+& $py -m playwright install chromium 2>&1 | Out-Null
+$ErrorActionPreference = "Stop"
 
 Write-Host "  ✓ Dependencias instaladas" -ForegroundColor Green
 
