@@ -915,7 +915,22 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
     offers_with_email = [o for o in offers if o.get("contact_email")]
     offers_no_email = [o for o in offers if not o.get("contact_email")]
 
-    console.print(f"  [cyan]Ofertas totales: {len(offers)} | Con email valido: {len(offers_with_email)} | Sin email: {len(offers_no_email)}[/cyan]\n")
+    # Deduplicate within this batch: same job_title (normalized) → keep first occurrence
+    norm = lambda s: re.sub(r'[^a-z0-9]', '', (s or '').lower())
+    seen_batch = set()
+    deduped = []
+    for o in offers_with_email:
+        # Use normalized title + email as key (same offer reposted by different people = same title)
+        key = norm(o.get("job_title", ""))
+        if key and key in seen_batch:
+            continue
+        if key:
+            seen_batch.add(key)
+        deduped.append(o)
+    batch_dupes = len(offers_with_email) - len(deduped)
+    offers_with_email = deduped
+
+    console.print(f"  [cyan]Ofertas totales: {len(offers)} | Con email valido: {len(offers_with_email) + batch_dupes} | Duplicadas: {batch_dupes} | Unicas: {len(offers_with_email)} | Sin email: {len(offers_no_email)}[/cyan]\n")
 
     if offers_with_email:
         table = Table(border_style="cyan", title="Ofertas con email de reclutador")
