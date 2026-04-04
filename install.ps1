@@ -158,14 +158,18 @@ if (-not $ok) {
 Write-Host ""
 
 # ── Clonar o actualizar ──
-if (Test-Path $InstallDir) {
+if ((Test-Path $InstallDir) -and (Test-Path "$InstallDir\job.py")) {
     Write-Host "  → Actualizando instalacion existente..." -ForegroundColor Cyan
     Push-Location $InstallDir
     git pull --quiet 2>&1 | Out-Null
     Pop-Location
 } else {
+    # Limpiar instalacion rota si existe
+    if (Test-Path $InstallDir) {
+        Remove-Item -Recurse -Force "$InstallDir\*" -ErrorAction SilentlyContinue 2>&1 | Out-Null
+    }
     Write-Host "  → Clonando repositorio..." -ForegroundColor Cyan
-    git clone --quiet https://github.com/dev-gaspar/jobhunter.git $InstallDir 2>&1 | Out-Null
+    git clone --quiet https://github.com/dev-gaspar/jobhunter.git "$InstallDir" 2>&1 | Out-Null
 }
 
 Write-Host "  ✓ Repositorio listo" -ForegroundColor Green
