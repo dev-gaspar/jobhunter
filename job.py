@@ -331,8 +331,43 @@ SOLO JSON valido.""", b64, "application/pdf")
 
     cfg["profile"] = profile
 
-    # 6. Job preferences
-    console.print(f"\n[bold cyan]6.[/bold cyan] [bold]Que tipo de empleo buscas?[/bold]")
+    # 6. Idiomas de busqueda
+    console.print(f"\n[bold cyan]6.[/bold cyan] [bold]En que idiomas buscar ofertas?[/bold]")
+    console.print("   [dim]Las ofertas y CVs se generaran en el idioma de cada oferta[/dim]")
+    lang_options = {"1": "Espanol", "2": "Ingles", "3": "Espanol e Ingles"}
+    for k, v in lang_options.items():
+        console.print(f"   [cyan]{k}.[/cyan] {v}")
+    lang_default = cfg.get("search_languages", "3")
+    lang_choice = Prompt.ask("   Selecciona", default=lang_default)
+    if lang_choice not in lang_options:
+        lang_choice = "3"
+    cfg["search_languages"] = lang_choice
+    console.print(f"   [green]{lang_options[lang_choice]}[/green]")
+
+    # 7. Modalidad de trabajo
+    console.print(f"\n[bold cyan]7.[/bold cyan] [bold]Que modalidad de trabajo buscas?[/bold]")
+    mode_options = {"1": "Remoto", "2": "Hibrido", "3": "Presencial", "4": "Cualquiera"}
+    for k, v in mode_options.items():
+        console.print(f"   [cyan]{k}.[/cyan] {v}")
+    mode_default = cfg.get("work_mode", "4")
+    mode_choice = Prompt.ask("   Selecciona", default=mode_default)
+    if mode_choice not in mode_options:
+        mode_choice = "4"
+    cfg["work_mode"] = mode_choice
+    cfg["work_mode_label"] = mode_options[mode_choice]
+    console.print(f"   [green]{mode_options[mode_choice]}[/green]")
+
+    # 7b. Ubicacion (si hibrido o presencial)
+    if mode_choice in ("2", "3"):
+        console.print(f"\n[bold cyan]   [/bold cyan] [bold]Tu ubicacion[/bold]")
+        console.print("   [dim]Ciudad y pais para filtrar ofertas cercanas[/dim]")
+        location = Prompt.ask("   Ubicacion", default=cfg.get("user_location", profile.get("location", "")))
+        cfg["user_location"] = location
+    else:
+        cfg["user_location"] = cfg.get("user_location", "")
+
+    # 8. Job preferences
+    console.print(f"\n[bold cyan]8.[/bold cyan] [bold]Que tipo de empleo buscas?[/bold]")
 
     if profile.get("skills"):
         with console.status("   Generando sugerencias de tu CV..."):
@@ -355,12 +390,30 @@ SOLO JSON valido.""", b64, "application/pdf")
         job_types = Prompt.ask("   Tipos de empleo", default="backend developer")
     cfg["job_types_raw"] = job_types
 
+    # Generar queries segun idioma y modalidad
+    lang = cfg.get("search_languages", "3")
+    work_mode = mode_options.get(mode_choice, "Cualquiera").lower()
+    mode_terms_es = {"remoto": "remoto", "hibrido": "hibrido", "presencial": "presencial", "cualquiera": ""}
+    mode_terms_en = {"remoto": "remote", "hibrido": "hybrid", "presencial": "onsite", "cualquiera": ""}
+    mode_es = mode_terms_es.get(work_mode, "")
+    mode_en = mode_terms_en.get(work_mode, "")
+
     queries = []
     for jt in [j.strip() for j in job_types.split(",") if j.strip()]:
-        queries.extend([
-            f"enviar CV {jt}", f"busco {jt} remoto", f"hiring {jt} remote",
-            f"contratando {jt}", f"vacante {jt} remoto",
-        ])
+        if lang in ("1", "3"):  # Espanol
+            queries.extend([
+                f"enviar CV {jt} {mode_es}".strip(),
+                f"busco {jt} {mode_es}".strip(),
+                f"contratando {jt} {mode_es}".strip(),
+                f"vacante {jt} {mode_es}".strip(),
+            ])
+        if lang in ("2", "3"):  # Ingles
+            queries.extend([
+                f"hiring {jt} {mode_en}".strip(),
+                f"looking for {jt} {mode_en}".strip(),
+                f"send CV {jt} {mode_en}".strip(),
+                f"job opening {jt} {mode_en}".strip(),
+            ])
     cfg["search_queries"] = queries
     save_config(cfg)
 
@@ -372,6 +425,9 @@ SOLO JSON valido.""", b64, "application/pdf")
         f"  CV:         {cfg.get('cv_path', 'no configurado')}\n"
         f"  Portfolio:  {profile.get('portfolio', '-')}\n"
         f"  LinkedIn:   {profile.get('linkedin', '-')}\n"
+        f"  Idiomas:    {lang_options[lang_choice]}\n"
+        f"  Modalidad:  {mode_options[mode_choice]}\n"
+        f"  Ubicacion:  {cfg.get('user_location', '-') or '-'}\n"
         f"  Busquedas:  {len(queries)} queries generadas\n\n"
         f"[bold]Siguiente paso:[/bold] [cyan]jobhunter login[/cyan]",
         border_style="green", title="JobHunter AI"
@@ -550,12 +606,24 @@ def agent_filter(cfg, text, ss=None):
     job_types = cfg.get("job_types_raw", "")
     profile_summary = profile.get("summary", "")
     profile_skills = profile.get("skills", {})
+    work_mode_label = cfg.get("work_mode_label", "Cualquiera")
+    user_location = cfg.get("user_location", "")
+
+    work_mode_rule = ""
+    if work_mode_label.lower() == "remoto":
+        work_mode_rule = "- SOLO ofertas remotas o que permitan trabajo remoto. Descartar presenciales y hibridas."
+    elif work_mode_label.lower() == "hibrido":
+        work_mode_rule = f"- SOLO ofertas hibridas o remotas. Si es hibrida/presencial, debe ser compatible con la ubicacion del candidato: {user_location}"
+    elif work_mode_label.lower() == "presencial":
+        work_mode_rule = f"- SOLO ofertas presenciales o hibridas compatibles con la ubicacion del candidato: {user_location}"
 
     prompt = f"""ROLE: Eres un agente especializado en filtrar ofertas de trabajo de LinkedIn.
 Tu unico trabajo es analizar publicaciones y determinar si contienen ofertas REALES y RELEVANTES para este candidato.
 
 PERFIL DEL CANDIDATO:
 - Busca empleo como: {job_types}
+- Modalidad preferida: {work_mode_label}
+{f'- Ubicacion del candidato: {user_location}' if user_location else ''}
 - Resumen: {profile_summary[:300]}
 - Habilidades: {json.dumps(profile_skills) if isinstance(profile_skills, dict) else str(profile_skills)[:500]}
 
@@ -567,13 +635,15 @@ EMAILS ENCONTRADOS EN EL TEXTO: {', '.join(emails) if emails else 'ninguno'}
 REGLAS DE FILTRADO:
 - Solo ofertas de TRABAJO reales (no cursos, certificaciones, logros personales, contenido general, publicidad)
 - Relevante si el puesto tiene relacion con lo que busca el candidato: {job_types}
+{work_mode_rule}
 - Extraer SIEMPRE el email si existe en el texto
 - Extraer empresa, titulo, descripcion COMPLETA con todos los detalles
 - Extraer requisitos especificos (habilidades, herramientas, anos de experiencia, idiomas, etc.)
 - Si la publicacion tiene multiples ofertas, toma la mas relevante para el candidato
+- DETECTAR el idioma en que esta escrita la publicacion (es, en, pt, etc.)
 
 JSON:
-{{"is_job": true/false, "job_title": "titulo exacto del puesto", "company": "empresa", "description": "descripcion DETALLADA incluyendo responsabilidades y lo que se espera del candidato", "requirements": "TODOS los requisitos mencionados", "contact_email": "email@empresa.com o null", "contact_name": "nombre de quien publica", "location": "ubicacion", "salary": "salario o null", "is_relevant": true/false, "relevance_reason": "razon concreta"}}
+{{"is_job": true/false, "job_title": "titulo exacto del puesto", "company": "empresa", "description": "descripcion DETALLADA incluyendo responsabilidades y lo que se espera del candidato", "requirements": "TODOS los requisitos mencionados", "contact_email": "email@empresa.com o null", "contact_name": "nombre de quien publica", "location": "ubicacion", "work_mode": "remote/hybrid/onsite/unknown", "salary": "salario o null", "language": "es/en/pt/fr/etc", "is_relevant": true/false, "relevance_reason": "razon concreta"}}
 
 Si NO es oferta: {{"is_job": false, "relevance_reason": "razon"}}
 SOLO JSON valido."""
@@ -598,14 +668,18 @@ def agent_cv(cfg, job):
     company = job.get("company", "Empresa")
     desc = job.get("description", "")
     reqs = job.get("requirements", "")
+    lang = job.get("language", "es")
+
+    lang_names = {"es": "ESPAÑOL", "en": "INGLES", "pt": "PORTUGUES", "fr": "FRANCES", "de": "ALEMAN"}
+    lang_name = lang_names.get(lang, "ESPAÑOL")
 
     prompt = f"""ROLE: Eres un agente experto en redaccion de CVs profesionales.
 Tu trabajo es tomar el perfil del candidato y REESCRIBIRLO para que encaje perfectamente con una oferta especifica.
 Esto funciona para CUALQUIER tipo de trabajo: tecnologia, marketing, ventas, diseno, administracion, salud, educacion, etc.
 
 REGLAS CRITICAS:
+- ESCRIBE TODO EL CV EN {lang_name}. La oferta esta en {lang_name} y el CV debe estar en el MISMO idioma.
 - TEXTO PLANO UNICAMENTE. PROHIBIDO usar markdown: nada de **negritas**, *italicas*, `codigo`, # encabezados, ni ningun formato. Solo texto limpio.
-- ESPAÑOL NEUTRO LATINOAMERICANO (sin jerga regional)
 - Usa la MISMA TERMINOLOGIA de la oferta. Si la oferta dice "Community Manager", el CV dice "Community Manager". Si dice "Backend Developer", dice "Backend Developer".
 - NO traduzcas terminos que en la industria se usan en su idioma original
 - Adapta TODO el CV al sector y lenguaje de la oferta
@@ -672,15 +746,28 @@ def agent_email(cfg, job):
     p = cfg["profile"]
     portfolio_line = f"\n- Portfolio: {p['portfolio']}" if p.get('portfolio') else ""
     linkedin_line = f"\n- LinkedIn: {p['linkedin']}" if p.get('linkedin') else ""
+    lang = job.get("language", "es")
+
+    lang_names = {"es": "ESPAÑOL", "en": "INGLES", "pt": "PORTUGUES", "fr": "FRANCES", "de": "ALEMAN"}
+    lang_name = lang_names.get(lang, "ESPAÑOL")
 
     # Build signature lines dynamically
     sig_parts = [p.get('name', '')]
     if p.get('portfolio'): sig_parts.append(p['portfolio'])
     if p.get('linkedin'): sig_parts.append(p['linkedin'])
 
+    lang_rules = {
+        "es": '1. ESPAÑOL NEUTRO LATINOAMERICANO. PROHIBIDO: "flipa", "mola", "tio", "chevere", "bacano", "pana"',
+        "en": "1. ENGLISH. Write in professional, natural English. No overly formal or robotic language.",
+        "pt": "1. PORTUGUES. Escreva em portugues profissional e natural.",
+    }
+    lang_rule = lang_rules.get(lang, f"1. Escribe en {lang_name}. Lenguaje profesional y natural.")
+
     prompt = f"""ROLE: Eres un agente especializado en escribir emails de aplicacion a ofertas de trabajo.
 Tu objetivo: escribir un email que suene 100% humano, personal, y que haga que el reclutador quiera responder.
 Esto funciona para CUALQUIER sector: tecnologia, marketing, ventas, diseno, salud, educacion, finanzas, etc.
+
+IDIOMA: Escribe TODO el email en {lang_name}. La oferta esta en {lang_name}.
 
 CANDIDATO:
 - Nombre: {p.get('name', '')}{portfolio_line}{linkedin_line}
@@ -693,13 +780,13 @@ OFERTA:
 - Contacto: {job.get('contact_name', 'equipo de seleccion')}
 
 REGLAS ESTRICTAS:
-1. ESPAÑOL NEUTRO LATINOAMERICANO. PROHIBIDO: "flipa", "mola", "tio", "chevere", "bacano", "pana"
+{lang_rule}
 2. TEXTO PLANO UNICAMENTE. PROHIBIDO: markdown, corchetes [], asteriscos **, formato [texto](url), HTML
 3. Las URLs van tal cual, sin formato alrededor
 4. MAXIMO 100 palabras en el cuerpo
 5. Debe sonar como si {p.get('name', 'el candidato')} lo escribiera personalmente
-6. PROHIBIDO frases de plantilla: "me emociona", "me apasiona profundamente", "me encantaria unirme"
-7. NO propongas agendar llamadas ni reuniones. Cierra con "quedo atento" o "me encantaria conversar sobre la posicion"
+6. PROHIBIDO frases de plantilla: "me emociona", "me apasiona profundamente", "me encantaria unirme", "I am excited", "I am passionate"
+7. NO propongas agendar llamadas ni reuniones
 8. Menciona 1-2 logros CONCRETOS con numeros que sean relevantes para ESTA oferta
 9. El asunto debe ser corto y directo (max 8 palabras)
 10. Firma simple en texto plano: {', '.join(sig_parts)}
@@ -833,11 +920,16 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
     if offers_with_email:
         table = Table(border_style="cyan", title="Ofertas con email de reclutador")
         table.add_column("#", width=3)
-        table.add_column("Puesto", max_width=35)
-        table.add_column("Empresa", max_width=20)
-        table.add_column("Email", max_width=30)
+        table.add_column("Puesto", max_width=30)
+        table.add_column("Empresa", max_width=18)
+        table.add_column("Modo", width=8)
+        table.add_column("Idioma", width=6)
+        table.add_column("Email", max_width=28)
+        mode_icons = {"remote": "Remoto", "hybrid": "Hibrid", "onsite": "Presn.", "unknown": "-"}
         for i, o in enumerate(offers_with_email, 1):
-            table.add_row(str(i), o["job_title"][:35], o["company"][:20], o["contact_email"])
+            wm = mode_icons.get(o.get("work_mode", "unknown"), "-")
+            la = (o.get("language", "?"))[:5].upper()
+            table.add_row(str(i), o["job_title"][:30], o["company"][:18], wm, la, o["contact_email"])
         console.print(table)
 
     if not offers_with_email:
