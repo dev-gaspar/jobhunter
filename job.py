@@ -695,7 +695,7 @@ OFERTA:
 
 INSTRUCCIONES PARA CADA SECCION:
 
-1. SUMMARY (sobre mi): Reescribe completamente para que suene como si el candidato fuera la persona IDEAL para este puesto especifico. Menciona las habilidades y experiencia que pide la oferta. 2-3 oraciones.
+1. SUMMARY (sobre mi): Reescribe completamente en PRIMERA PERSONA (yo tengo, yo desarrollo, mi experiencia) para que suene como si el candidato fuera la persona IDEAL para este puesto especifico. PROHIBIDO tercera persona (Jose es, Jose tiene). Menciona las habilidades y experiencia que pide la oferta. 2-3 oraciones.
 
 2. TITLE: Usa el mismo titulo o terminologia de la oferta.
 
