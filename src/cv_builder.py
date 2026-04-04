@@ -163,15 +163,26 @@ def build_styles():
     return styles
 
 
+SECTION_LABELS = {
+    "es": {"summary": "RESUMEN PROFESIONAL", "skills": "HABILIDADES TECNICAS", "experience": "EXPERIENCIA PROFESIONAL", "projects": "PROYECTOS CLAVE", "education": "EDUCACION"},
+    "en": {"summary": "PROFESSIONAL SUMMARY", "skills": "TECHNICAL SKILLS", "experience": "PROFESSIONAL EXPERIENCE", "projects": "KEY PROJECTS", "education": "EDUCATION"},
+    "pt": {"summary": "RESUMO PROFISSIONAL", "skills": "HABILIDADES TECNICAS", "experience": "EXPERIENCIA PROFISSIONAL", "projects": "PROJETOS CHAVE", "education": "EDUCACAO"},
+    "fr": {"summary": "RESUME PROFESSIONNEL", "skills": "COMPETENCES TECHNIQUES", "experience": "EXPERIENCE PROFESSIONNELLE", "projects": "PROJETS CLES", "education": "FORMATION"},
+    "de": {"summary": "BERUFSPROFIL", "skills": "FACHKENNTNISSE", "experience": "BERUFSERFAHRUNG", "projects": "SCHLUSSELPROJEKTE", "education": "AUSBILDUNG"},
+}
+
+
 def generate_cv_pdf(
     cv_data: dict,
     profile: dict,
     output_path: str,
     job_title: str = "",
     company: str = "",
+    language: str = "es",
 ):
     """Generate a professional PDF CV."""
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    labels = SECTION_LABELS.get(language, SECTION_LABELS["es"])
 
     doc = SimpleDocTemplate(
         output_path,
@@ -209,13 +220,13 @@ def generate_cv_pdf(
     story.append(HRFlowable(width="100%", thickness=1, color=LINE_COLOR, spaceAfter=8))
 
     # === RESUMEN PROFESIONAL ===
-    story.append(Paragraph("RESUMEN PROFESIONAL", styles["CVSection"]))
+    story.append(Paragraph(labels["summary"], styles["CVSection"]))
     story.append(Paragraph(_safe(cv_data["summary"]), styles["CVSummary"]))
 
     # === HABILIDADES ===
     skills = cv_data.get("skills_highlighted", [])
     if skills:
-        story.append(Paragraph("HABILIDADES TECNICAS", styles["CVSection"]))
+        story.append(Paragraph(labels["skills"], styles["CVSection"]))
         story.append(
             HRFlowable(width="100%", thickness=0.5, color=LINE_COLOR, spaceAfter=4)
         )
@@ -225,7 +236,7 @@ def generate_cv_pdf(
     # === EXPERIENCIA ===
     experience = cv_data.get("experience", [])
     if experience:
-        story.append(Paragraph("EXPERIENCIA PROFESIONAL", styles["CVSection"]))
+        story.append(Paragraph(labels["experience"], styles["CVSection"]))
         story.append(
             HRFlowable(width="100%", thickness=0.5, color=LINE_COLOR, spaceAfter=4)
         )
@@ -247,7 +258,7 @@ def generate_cv_pdf(
     # === PROYECTOS ===
     projects = cv_data.get("projects", [])
     if projects:
-        story.append(Paragraph("PROYECTOS CLAVE", styles["CVSection"]))
+        story.append(Paragraph(labels["projects"], styles["CVSection"]))
         story.append(
             HRFlowable(width="100%", thickness=0.5, color=LINE_COLOR, spaceAfter=4)
         )
@@ -266,7 +277,7 @@ def generate_cv_pdf(
     # === EDUCACION ===
     education = cv_data.get("education", profile.get("education", []))
     if education:
-        story.append(Paragraph("EDUCACION", styles["CVSection"]))
+        story.append(Paragraph(labels["education"], styles["CVSection"]))
         story.append(
             HRFlowable(width="100%", thickness=0.5, color=LINE_COLOR, spaceAfter=4)
         )

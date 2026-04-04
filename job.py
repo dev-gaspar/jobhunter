@@ -1015,7 +1015,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
                     cv_fn = get_cv_filename(company, title)
                     cv_path = os.path.join(BASE_DIR, "output", "cvs", cv_fn)
                     os.makedirs(os.path.dirname(cv_path), exist_ok=True)
-                    generate_cv_pdf(cv_data, cfg["profile"], cv_path, title, company)
+                    generate_cv_pdf(cv_data, cfg["profile"], cv_path, title, company, language=job.get("language", "es"))
                     console.print(f"    [green]CV generado[/green]")
                     break
                 except Exception as e:
