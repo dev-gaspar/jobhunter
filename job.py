@@ -1339,6 +1339,8 @@ def cmd_help():
     console.print("  [dim]$ jobhunter run --time week[/dim]")
     console.print("  [dim]$ jobhunter run --auto[/dim]")
     console.print("  [dim]$ jobhunter run --time month --auto[/dim]")
+    console.print("  [dim]$ jobhunter optimize[/dim]")
+    console.print('  [dim]$ jobhunter optimize "no encuentro ofertas remotas"[/dim]')
     console.print()
 
 

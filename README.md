@@ -27,6 +27,8 @@ jobhunter setup                          Configuracion inicial
 jobhunter login                          Iniciar sesion en LinkedIn
 jobhunter --test email@test.com          Prueba (envia a tu correo)
 jobhunter run                            Buscar y enviar a reclutadores
+jobhunter optimize                       Optimizar queries de busqueda con IA
+jobhunter optimize "..."                 Optimizar con feedback especifico
 jobhunter status                         Ver configuracion y estadisticas
 jobhunter update                         Actualizar a la ultima version
 jobhunter help                           Ver ayuda completa
@@ -58,6 +60,24 @@ Para saltar la seleccion y enviar a todas automaticamente:
 jobhunter run --auto
 jobhunter --test mi@email.com --auto
 ```
+
+### Optimizar queries de busqueda
+
+Un agente de IA analiza tu perfil, queries actuales, e historial de ejecuciones para generar mejores terminos de busqueda:
+
+```
+jobhunter optimize
+```
+
+Tambien puedes darle feedback especifico sobre problemas que tienes:
+
+```
+jobhunter optimize "no encuentro ofertas remotas en LATAM"
+jobhunter optimize "mis queries son muy genericas, necesito mas ofertas de AI/ML"
+jobhunter optimize "solo me salen ofertas en espanol, quiero mas en ingles"
+```
+
+El agente muestra un diff de queries actuales vs propuestas y pide confirmacion antes de guardar.
 
 ### Modelos de Gemini
 
@@ -96,7 +116,7 @@ El sistema es un script Python (`job.py`) que orquesta 4 componentes:
 ```
 job.py
  ├── Playwright (scraping de LinkedIn)
- ├── Gemini API (3 agentes de IA, modelo configurable)
+ ├── Gemini API (4 agentes de IA, modelo configurable)
  ├── ReportLab (generacion de PDFs)
  └── SMTP (envio de emails)
 ```
@@ -112,7 +132,7 @@ job.py
 
 ### Sistema Multi-Agente (Gemini)
 
-Tres agentes especializados, cada uno con su propio system prompt:
+Cuatro agentes especializados, cada uno con su propio system prompt:
 
 **Agente 1 - Filtrador**: Recibe el texto de un post y determina si es una oferta real, si es relevante para el perfil del usuario, y extrae toda la informacion estructurada (titulo, empresa, requisitos, email, salario, ubicacion).
 
@@ -120,7 +140,9 @@ Tres agentes especializados, cada uno con su propio system prompt:
 
 **Agente 3 - Email Writer**: Genera un email de aplicacion corto (max 100 palabras), en espanol neutro, texto plano, sin frases de plantilla, con 1-2 logros concretos con numeros.
 
-Los tres agentes usan el modelo de Gemini seleccionado durante el setup via HTTP POST directo (sin SDK). Cada llamada tiene reintentos con backoff exponencial para manejar rate limits (429).
+**Agente 4 - Optimizer**: Analiza el perfil del usuario, queries actuales, historial de ejecuciones (tasa de conversion), y feedback opcional del usuario para generar queries de busqueda optimizadas. Usa terminos que reclutadores realmente usan en LinkedIn.
+
+Los cuatro agentes usan el modelo de Gemini seleccionado durante el setup via HTTP POST directo (sin SDK). Cada llamada tiene reintentos con backoff exponencial para manejar rate limits (429).
 
 ### Generacion de PDFs
 
