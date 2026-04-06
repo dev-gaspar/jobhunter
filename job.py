@@ -65,7 +65,7 @@ CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 SESSION_DIR = os.path.join(BASE_DIR, ".session")
 KB_PATH = os.path.join(BASE_DIR, "knowledge.json")  # Knowledge base
 
-BANNER = """
+BANNER_LARGE = """\
 [bold cyan]
        ██╗ ██████╗ ██████╗ ██╗  ██╗██╗   ██╗███╗   ██╗████████╗███████╗██████╗
        ██║██╔═══██╗██╔══██╗██║  ██║██║   ██║████╗  ██║╚══██╔══╝██╔════╝██╔══██╗
@@ -76,6 +76,18 @@ BANNER = """
 [/bold cyan]
 [dim]  AI-Powered Job Search & Auto Apply  |  Playwright + Gemini + Gmail[/dim]
 """
+
+BANNER_SMALL = """\
+[bold cyan]     ╦╔═╗╔╗ ╦ ╦╦ ╦╔╗╔╔╦╗╔═╗╦═╗
+     ║║ ║╠╩╗╠═╣║ ║║║║ ║ ║╣ ╠╦╝
+    ╚╝╚═╝╚═╝╩ ╩╚═╝╝╚╝ ╩ ╚═╝╩╚═[/bold cyan]
+[dim]  AI Job Search & Auto Apply[/dim]
+"""
+
+
+def get_banner():
+    width = shutil.get_terminal_size((80, 24)).columns
+    return BANNER_LARGE if width >= 80 else BANNER_SMALL
 
 
 # ══════════════════════════════════════════════
@@ -216,7 +228,7 @@ def kill_playwright_zombies():
 # SETUP WIZARD
 # ══════════════════════════════════════════════
 def cmd_setup():
-    console.print(BANNER)
+    console.print(get_banner())
     console.print(Rule("[bold]Setup Wizard[/bold]"))
     console.print()
 
@@ -438,7 +450,7 @@ SOLO JSON valido.""", b64, "application/pdf")
 # LOGIN
 # ══════════════════════════════════════════════
 def cmd_login():
-    console.print(BANNER)
+    console.print(get_banner())
     kill_playwright_zombies()
     os.makedirs(SESSION_DIR, exist_ok=True)
     chrome = find_chrome()
@@ -478,7 +490,7 @@ def cmd_login():
 # STATUS
 # ══════════════════════════════════════════════
 def cmd_status():
-    console.print(BANNER)
+    console.print(get_banner())
     cfg = load_config()
     kb = load_kb()
 
@@ -505,7 +517,7 @@ def cmd_status():
 # UPDATE
 # ══════════════════════════════════════════════
 def cmd_update():
-    console.print(BANNER)
+    console.print(get_banner())
     console.print(Rule("[bold]Actualizando JobHunter AI[/bold]"))
     console.print()
 
@@ -811,7 +823,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
         console.print("[red]No hay sesion LinkedIn. Ejecuta:[/red] [cyan]jobhunter login[/cyan]")
         return
 
-    console.print(BANNER)
+    console.print(get_banner())
     mode = "test" if test_email else "run"
 
     time_labels = {"24h": "Ultimas 24 horas", "week": "Esta semana", "month": "Este mes"}
@@ -928,14 +940,17 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
     console.print(f"  [cyan]Ofertas totales: {len(offers)} | Con email valido: {len(offers_with_email) + batch_dupes} | Duplicadas: {batch_dupes} | Unicas: {len(offers_with_email)} | Sin email: {len(offers_no_email)}[/cyan]\n")
 
     if offers_with_email:
-        table = Table(border_style="cyan", title="Ofertas con email de reclutador")
+        tw = shutil.get_terminal_size((80, 24)).columns
+        wide = tw >= 100
+        table = Table(border_style="cyan", title="Ofertas con email de reclutador", expand=False)
         table.add_column("#", width=3)
-        table.add_column("Puesto", max_width=28)
-        table.add_column("Empresa", max_width=16)
+        table.add_column("Puesto", max_width=28 if wide else 20)
+        table.add_column("Empresa", max_width=16 if wide else 12)
         table.add_column("Modalidad", width=10)
-        table.add_column("Ubicacion", max_width=20)
-        table.add_column("Idioma", width=6)
-        table.add_column("Email", max_width=26)
+        if wide:
+            table.add_column("Ubicacion", max_width=20)
+            table.add_column("Idioma", width=6)
+        table.add_column("Email", max_width=26 if wide else 22)
         mode_icons = {"remote": "[green]Remoto[/green]", "hybrid": "[yellow]Hibrido[/yellow]", "onsite": "[red]Presencial[/red]", "unknown": "-"}
         for i, o in enumerate(offers_with_email, 1):
             wm = mode_icons.get(o.get("work_mode", "unknown"), "-")
@@ -943,7 +958,10 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
             if loc.lower() in ("null", "none", "n/a", "no especificado", "no mencionado"):
                 loc = "-"
             la = (o.get("language", "?"))[:5].upper()
-            table.add_row(str(i), o["job_title"][:28], o["company"][:16], wm, loc[:20], la, o["contact_email"])
+            if wide:
+                table.add_row(str(i), o["job_title"][:28], o["company"][:16], wm, loc[:20], la, o["contact_email"])
+            else:
+                table.add_row(str(i), o["job_title"][:20], o["company"][:12], wm, o["contact_email"])
         console.print(table)
 
     if not offers_with_email:
@@ -1093,7 +1111,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
 # HELP
 # ══════════════════════════════════════════════
 def cmd_help():
-    console.print(BANNER)
+    console.print(get_banner())
     console.print(Panel(
         "[bold]Comandos:[/bold]\n\n"
         "  [cyan]jobhunter setup[/cyan]\n"
@@ -1194,10 +1212,14 @@ def main():
     elif cmd in ("run",):
         cmd_run(time_filter=tf, auto_apply=auto)
     else:
-        console.print(BANNER)
+        console.print(get_banner())
         console.print(f"  [red]Comando desconocido: {cmd}[/red]")
         console.print("  [dim]Usa 'jobhunter help' para ver comandos disponibles[/dim]")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        console.print("\n\n  [yellow]Cancelado por el usuario.[/yellow]\n")
+        sys.exit(0)
