@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
 JobHunter AI v1.0
-Automated LinkedIn Job Search + AI CV Generation + Auto Apply
+Busqueda automatizada de empleo en LinkedIn + CVs con IA + Envio automatico
 
-Usage:
-    jobhunter                       First run = setup wizard, then search
-    jobhunter --test <email>        Test mode (sends to your email)
-    jobhunter run                   Production mode (sends to recruiters)
-    jobhunter login                 Re-login to LinkedIn
-    jobhunter status                View config and stats
-    jobhunter setup                 Re-run setup wizard
+Uso:
+    jobhunter                       Primera vez = asistente de config
+    jobhunter --test <email>        Modo prueba (envia a tu correo)
+    jobhunter run                   Buscar y enviar a reclutadores
+    jobhunter login                 Iniciar sesion en LinkedIn
+    jobhunter status                Ver configuracion y estadisticas
+    jobhunter setup                 Configuracion inicial
 """
 import json, os, sys, re, time, smtplib, subprocess, shutil, requests, base64
 import urllib.parse
@@ -28,7 +28,7 @@ def ensure_deps():
         except ImportError:
             needed.append(mod)
     if needed:
-        print(f"Instalando: {', '.join(needed)}...")
+        print(f"Instalando dependencias: {', '.join(needed)}...")
         subprocess.run([sys.executable, "-m", "pip", "install"] + needed, capture_output=True)
     try:
         from playwright.sync_api import sync_playwright
@@ -74,14 +74,14 @@ BANNER_LARGE = """\
   ╚█████╔╝╚██████╔╝██████╔╝██║  ██║╚██████╔╝██║ ╚████║   ██║   ███████╗██║  ██║
    ╚════╝  ╚═════╝ ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚═╝  ╚═╝
 [/bold cyan]
-[dim]  AI-Powered Job Search & Auto Apply  |  Playwright + Gemini + Gmail[/dim]
+[dim]  Busqueda de empleo automatizada con IA  |  Playwright + Gemini + Gmail[/dim]
 """
 
 BANNER_SMALL = """\
 [bold cyan]     ╦╔═╗╔╗ ╦ ╦╦ ╦╔╗╔╔╦╗╔═╗╦═╗
      ║║ ║╠╩╗╠═╣║ ║║║║ ║ ║╣ ╠╦╝
     ╚╝╚═╝╚═╝╩ ╩╚═╝╝╚╝ ╩ ╚═╝╩╚═[/bold cyan]
-[dim]  AI Job Search & Auto Apply[/dim]
+[dim]  Busqueda de empleo con IA[/dim]
 """
 
 
@@ -235,12 +235,12 @@ def cmd_setup():
     cfg = load_config()
 
     # 1. Gemini
-    console.print("[bold cyan]1.[/bold cyan] [bold]API Key de Gemini[/bold]")
+    console.print("[bold cyan]1.[/bold cyan] [bold]Clave API de Gemini[/bold]")
     console.print("   [dim]Obtienla gratis en https://aistudio.google.com/apikey[/dim]")
     while True:
-        key = Prompt.ask("   API Key", default=cfg.get("gemini_api_key", ""))
+        key = Prompt.ask("   Clave API", default=cfg.get("gemini_api_key", ""))
         if not key:
-            console.print("   [red]La API key es obligatoria.[/red]")
+            console.print("   [red]La clave API es obligatoria.[/red]")
             continue
         with console.status("   Verificando..."):
             try:
@@ -250,7 +250,7 @@ def cmd_setup():
                 cfg["gemini_api_key"] = key
                 break
             except:
-                console.print("   [red]API key invalida. Intentalo de nuevo.[/red]")
+                console.print("   [red]Clave API invalida. Intentalo de nuevo.[/red]")
 
     # 1b. Modelo de Gemini
     console.print(f"\n[bold cyan]   [/bold cyan] [bold]Modelo de Gemini[/bold]")
@@ -271,22 +271,22 @@ def cmd_setup():
         console.print(f"   [red]Selecciona un numero del 1 al {len(GEMINI_MODELS)}[/red]")
 
     # 2. Gmail
-    console.print(f"\n[bold cyan]2.[/bold cyan] [bold]Correo Gmail + App Password[/bold]")
-    console.print("   [dim]Necesitas un App Password: Google Account > Security > App Passwords[/dim]")
+    console.print(f"\n[bold cyan]2.[/bold cyan] [bold]Correo Gmail + Contrasena de aplicacion[/bold]")
+    console.print("   [dim]Necesitas una contrasena de aplicacion: Cuenta Google > Seguridad > Contrasenas de aplicacion[/dim]")
     while True:
         email = Prompt.ask("   Gmail", default=cfg.get("smtp_email", ""))
         if not re.match(r'^[^@]+@gmail\.com$', email):
             console.print("   [red]Debe ser una cuenta @gmail.com[/red]")
             continue
-        pwd = Prompt.ask("   App Password", default=cfg.get("smtp_password",""), password=True)
+        pwd = Prompt.ask("   Contrasena de app", default=cfg.get("smtp_password",""), password=True)
         if not pwd or len(pwd) < 10:
-            console.print("   [red]El App Password debe tener al menos 16 caracteres (sin espacios)[/red]")
+            console.print("   [red]La contrasena de aplicacion debe tener al menos 16 caracteres (sin espacios)[/red]")
             continue
         with console.status("   Verificando SMTP..."):
             try:
                 with smtplib.SMTP("smtp.gmail.com", 587) as s:
                     s.starttls(); s.login(email, pwd)
-                console.print("   [green]SMTP funciona[/green]")
+                console.print("   [green]Conexion SMTP verificada[/green]")
                 cfg["smtp_email"] = email
                 cfg["smtp_password"] = pwd
                 break
@@ -322,7 +322,7 @@ Adapta las categorias de skills al perfil real de la persona (no asumas que es t
 SOLO JSON valido.""", b64, "application/pdf")
                 profile = json.loads(result)
                 console.print(f"   [green]CV leido! Nombre: {profile.get('name', '?')}[/green]")
-                console.print(f"   [dim]Skills: {', '.join(profile.get('skills',{}).get('backend',[])[:5])}...[/dim]")
+                console.print(f"   [dim]Habilidades: {', '.join(list(profile.get('skills',{}).values())[0][:5]) if profile.get('skills') else '-'}...[/dim]")
                 break
             except Exception as e:
                 console.print(f"   [red]Error leyendo CV: {e}[/red]")
@@ -378,7 +378,7 @@ SOLO JSON valido.""", b64, "application/pdf")
     else:
         cfg["user_location"] = cfg.get("user_location", "")
 
-    # 8. Job preferences
+    # 8. Preferencias de empleo
     console.print(f"\n[bold cyan]8.[/bold cyan] [bold]Que tipo de empleo buscas?[/bold]")
 
     if profile.get("skills"):
@@ -431,16 +431,16 @@ SOLO JSON valido.""", b64, "application/pdf")
 
     console.print()
     console.print(Panel(
-        f"[bold green]Setup completo![/bold green]\n\n"
+        f"[bold green]Configuracion completa![/bold green]\n\n"
         f"  Nombre:     {profile.get('name', '?')}\n"
-        f"  Gmail:      {cfg['smtp_email']}\n"
+        f"  Correo:     {cfg['smtp_email']}\n"
         f"  CV:         {cfg.get('cv_path', 'no configurado')}\n"
         f"  Portfolio:  {profile.get('portfolio', '-')}\n"
         f"  LinkedIn:   {profile.get('linkedin', '-')}\n"
         f"  Idiomas:    {lang_options[lang_choice]}\n"
         f"  Modalidad:  {mode_options[mode_choice]}\n"
         f"  Ubicacion:  {cfg.get('user_location', '-') or '-'}\n"
-        f"  Busquedas:  {len(queries)} queries generadas\n\n"
+        f"  Busquedas:  {len(queries)} generadas\n\n"
         f"[bold]Siguiente paso:[/bold] [cyan]jobhunter login[/cyan]",
         border_style="green", title="JobHunter AI"
     ))
@@ -457,7 +457,7 @@ def cmd_login():
 
     console.print(Panel(
         "[bold]Iniciar sesion en LinkedIn[/bold]\n\n"
-        "Se abrira Chrome. Inicia sesion con [bold]email y password[/bold]\n"
+        "Se abrira Chrome. Inicia sesion con [bold]correo y contrasena[/bold]\n"
         "[red]NO uses el boton de Google[/red] (lo bloquea en navegadores automatizados)\n\n"
         "Cuando estes dentro de LinkedIn, [bold]cierra el navegador[/bold].",
         border_style="cyan"
@@ -498,14 +498,14 @@ def cmd_status():
     table.add_column("", style="bold", width=20)
     table.add_column("")
 
-    table.add_row("Gemini API", "[green]OK[/green]" if cfg.get("gemini_api_key") else "[red]No configurada[/red]")
+    table.add_row("Clave API", "[green]Configurada[/green]" if cfg.get("gemini_api_key") else "[red]No configurada[/red]")
     table.add_row("Modelo", cfg.get("gemini_model", "gemini-2.5-flash"))
-    table.add_row("Gmail", cfg.get("smtp_email", "[red]No configurado[/red]"))
-    table.add_row("SMTP", "[green]OK[/green]" if cfg.get("smtp_password") else "[red]No configurado[/red]")
+    table.add_row("Correo", cfg.get("smtp_email", "[red]No configurado[/red]"))
+    table.add_row("Contrasena", "[green]Configurada[/green]" if cfg.get("smtp_password") else "[red]No configurada[/red]")
     table.add_row("CV", cfg.get("cv_path") or "[yellow]No configurado[/yellow]")
     table.add_row("Nombre", cfg.get("profile",{}).get("name", "[yellow]?[/yellow]"))
     table.add_row("Busqueda", cfg.get("job_types_raw", "[yellow]No configurado[/yellow]"))
-    table.add_row("Queries", str(len(cfg.get("search_queries",[]))))
+    table.add_row("Busquedas", str(len(cfg.get("search_queries",[]))))
     table.add_row("LinkedIn", "[green]Sesion guardada[/green]" if os.path.exists(SESSION_DIR) else "[red]No[/red]")
     table.add_row("Ejecuciones", str(len(kb.get("runs",[]))))
     table.add_row("Aplicaciones", str(len(kb.get("applications",[]))))
@@ -831,7 +831,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
         f"  Nombre:  {cfg['profile'].get('name','?')}\n"
         f"  Destino: {test_email or 'Reclutadores'}\n"
         f"  Tiempo:  {time_labels.get(time_filter, time_filter)}\n"
-        f"  Queries: {len(cfg.get('search_queries',[]))}",
+        f"  Busquedas: {len(cfg.get('search_queries',[]))}",
         border_style="cyan", title="JobHunter AI"
     ))
 
@@ -886,7 +886,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
 
         browser.close()
 
-    console.print(f"  [cyan]Posts unicos: {len(all_posts)} | Emails en texto: {sum(len(p.get('emails_found',[])) for p in all_posts)}[/cyan]")
+    console.print(f"  [cyan]Posts unicos: {len(all_posts)} | Emails encontrados: {sum(len(p.get('emails_found',[])) for p in all_posts)}[/cyan]")
 
     if not all_posts:
         console.print("  [yellow]No se encontraron posts. Intenta con otros terminos de busqueda.[/yellow]")
@@ -1094,10 +1094,10 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
     # Summary
     console.print()
     console.print(Panel(
-        f"  Posts analizados:    {len(all_posts)}\n"
-        f"  Ofertas con email:   {len(offers)}\n"
-        f"  Emails enviados:     [bold green]{sent}[/bold green]\n"
-        f"  Errores:             {errors}",
+        f"  Posts analizados:      {len(all_posts)}\n"
+        f"  Ofertas con email:     {len(offers)}\n"
+        f"  Correos enviados:      [bold green]{sent}[/bold green]\n"
+        f"  Errores:               {errors}",
         border_style="green", title="Resumen"
     ))
 
@@ -1115,16 +1115,16 @@ def cmd_help():
     console.print(Panel(
         "[bold]Comandos:[/bold]\n\n"
         "  [cyan]jobhunter setup[/cyan]\n"
-        "    Configuracion inicial: API key de Gemini, modelo de IA,\n"
+        "    Configuracion inicial: clave API de Gemini, modelo de IA,\n"
         "    correo Gmail, CV, y tipo de empleo que buscas.\n\n"
         "  [cyan]jobhunter login[/cyan]\n"
         "    Abre Chrome para iniciar sesion en LinkedIn.\n"
         "    La sesion se guarda y no necesitas volver a hacerlo.\n\n"
         "  [cyan]jobhunter --test email@test.com[/cyan]\n"
-        "    Modo prueba. Busca ofertas y envia todo a TU correo.\n"
-        "    Incluye info del reclutador en cada email para referencia.\n\n"
+        "    Prueba. Busca ofertas y envia todo a TU correo.\n"
+        "    Incluye info del reclutador en cada correo como referencia.\n\n"
         "  [cyan]jobhunter run[/cyan]\n"
-        "    Busca ofertas y envia emails directamente a reclutadores.\n"
+        "    Busca ofertas y envia correos directamente a reclutadores.\n"
         "    Muestra las ofertas encontradas y te deja seleccionar\n"
         "    a cuales aplicar antes de generar CVs y enviar.\n\n"
         "  [cyan]jobhunter status[/cyan]\n"
@@ -1138,7 +1138,7 @@ def cmd_help():
         "            [cyan]24h[/cyan]    Ultimas 24 horas [dim](por defecto)[/dim]\n"
         "            [cyan]week[/cyan]   Esta semana\n"
         "            [cyan]month[/cyan]  Este mes\n\n"
-        "  [cyan]--auto[/cyan]   Enviar a todas las ofertas sin preguntar.\n"
+        "  [cyan]--auto[/cyan]   Aplicar a todas las ofertas sin preguntar.\n"
         "          Por defecto, muestra la tabla de ofertas y te deja\n"
         "          elegir cuales aplicar (numeros separados por coma,\n"
         "          'all' para todas, o 'q' para cancelar).\n\n"
@@ -1185,7 +1185,22 @@ def parse_time_filter(args):
     return "24h"
 
 
+def check_for_updates():
+    """Quick non-blocking check for new commits on remote."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", BASE_DIR, "fetch", "--dry-run"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.stderr.strip():
+            console.print("  [yellow]Nueva version disponible.[/yellow] Ejecuta: [cyan]jobhunter update[/cyan]\n")
+    except Exception:
+        pass
+
+
 def main():
+    check_for_updates()
+
     if len(sys.argv) < 2:
         if not is_configured():
             cmd_setup()
