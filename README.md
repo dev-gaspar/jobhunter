@@ -25,8 +25,8 @@ Esto instala el comando `jobhunter` globalmente en tu terminal.
 ```
 jobhunter setup                          Configuracion inicial
 jobhunter login                          Iniciar sesion en LinkedIn
-jobhunter --test email@test.com          Modo prueba (envia a tu correo)
-jobhunter run                            Modo produccion (envia a reclutadores)
+jobhunter --test email@test.com          Prueba (envia a tu correo)
+jobhunter run                            Buscar y enviar a reclutadores
 jobhunter status                         Ver configuracion y estadisticas
 jobhunter update                         Actualizar a la ultima version
 jobhunter help                           Ver ayuda completa
@@ -42,7 +42,7 @@ jobhunter --test email@test.com --time week      Esta semana
 jobhunter run --time month                       Este mes
 ```
 
-### Modo automatico
+### Seleccion de ofertas
 
 Por defecto, despues del analisis se muestra una tabla con las ofertas encontradas y puedes elegir a cuales aplicar:
 

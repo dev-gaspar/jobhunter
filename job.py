@@ -812,22 +812,16 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
         return
 
     console.print(BANNER)
-    mode = "TEST" if test_email else "PRODUCCION"
-    mode_color = "cyan" if test_email else "green"
+    mode = "test" if test_email else "run"
 
     time_labels = {"24h": "Ultimas 24 horas", "week": "Esta semana", "month": "Este mes"}
     console.print(Panel(
-        f"  Modo:    [bold {mode_color}]{mode}[/bold {mode_color}]\n"
         f"  Nombre:  {cfg['profile'].get('name','?')}\n"
-        f"  Destino: {test_email or 'Reclutadores reales'}\n"
+        f"  Destino: {test_email or 'Reclutadores'}\n"
         f"  Tiempo:  {time_labels.get(time_filter, time_filter)}\n"
         f"  Queries: {len(cfg.get('search_queries',[]))}",
-        border_style=mode_color, title="JobHunter AI"
+        border_style="cyan", title="JobHunter AI"
     ))
-
-    if not test_email:
-        if not Confirm.ask("\n  [yellow]PRODUCCION: Se enviaran emails a reclutadores. Continuar?[/yellow]"):
-            return
 
     kill_playwright_zombies()
     queries = cfg.get("search_queries", ["enviar CV backend developer"])
@@ -851,21 +845,22 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
             console.print("  [red]Sesion expirada. Ejecuta:[/red] [cyan]jobhunter login[/cyan]")
             browser.close(); return
 
-        with Progress(
-            SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
-            BarColumn(), TextColumn("{task.completed}/{task.total}"),
-            TimeElapsedColumn(), console=console
-        ) as prog:
-            task = prog.add_task("Buscando publicaciones...", total=len(queries))
-            for query in queries:
-                posts = scrape_posts(page, query, time_filter=time_filter)
-                for pi in posts:
-                    key = pi["text"][:150]
-                    if key not in seen:
-                        seen.add(key)
-                        all_posts.append(pi)
-                prog.advance(task)
-                time.sleep(3)
+        for qi, query in enumerate(queries, 1):
+            console.print(f"  [dim][{qi}/{len(queries)}][/dim] {query[:60]}", end="")
+            posts = scrape_posts(page, query, time_filter=time_filter)
+            new_count = 0
+            for pi in posts:
+                key = pi["text"][:150]
+                if key not in seen:
+                    seen.add(key)
+                    all_posts.append(pi)
+                    new_count += 1
+            emails_found = sum(len(p.get("emails_found", [])) for p in posts)
+            if new_count > 0:
+                console.print(f"  [green]+{new_count} posts[/green] [dim]({emails_found} emails)[/dim]")
+            else:
+                console.print(f"  [dim]sin nuevos[/dim]")
+            time.sleep(3)
 
         # Screenshots (optional, quick)
         text_boxes = page.query_selector_all('span[data-testid="expandable-text-box"]')
@@ -935,16 +930,20 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
     if offers_with_email:
         table = Table(border_style="cyan", title="Ofertas con email de reclutador")
         table.add_column("#", width=3)
-        table.add_column("Puesto", max_width=30)
-        table.add_column("Empresa", max_width=18)
-        table.add_column("Modo", width=8)
+        table.add_column("Puesto", max_width=28)
+        table.add_column("Empresa", max_width=16)
+        table.add_column("Modalidad", width=10)
+        table.add_column("Ubicacion", max_width=20)
         table.add_column("Idioma", width=6)
-        table.add_column("Email", max_width=28)
-        mode_icons = {"remote": "Remoto", "hybrid": "Hibrid", "onsite": "Presn.", "unknown": "-"}
+        table.add_column("Email", max_width=26)
+        mode_icons = {"remote": "[green]Remoto[/green]", "hybrid": "[yellow]Hibrido[/yellow]", "onsite": "[red]Presencial[/red]", "unknown": "-"}
         for i, o in enumerate(offers_with_email, 1):
             wm = mode_icons.get(o.get("work_mode", "unknown"), "-")
+            loc = o.get("location") or "-"
+            if loc.lower() in ("null", "none", "n/a", "no especificado", "no mencionado"):
+                loc = "-"
             la = (o.get("language", "?"))[:5].upper()
-            table.add_row(str(i), o["job_title"][:30], o["company"][:18], wm, la, o["contact_email"])
+            table.add_row(str(i), o["job_title"][:28], o["company"][:16], wm, loc[:20], la, o["contact_email"])
         console.print(table)
 
     if not offers_with_email:
@@ -1080,8 +1079,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
         f"  Posts analizados:    {len(all_posts)}\n"
         f"  Ofertas con email:   {len(offers)}\n"
         f"  Emails enviados:     [bold green]{sent}[/bold green]\n"
-        f"  Errores:             {errors}\n"
-        f"  Modo:                {mode}",
+        f"  Errores:             {errors}",
         border_style="green", title="Resumen"
     ))
 
@@ -1108,7 +1106,7 @@ def cmd_help():
         "    Modo prueba. Busca ofertas y envia todo a TU correo.\n"
         "    Incluye info del reclutador en cada email para referencia.\n\n"
         "  [cyan]jobhunter run[/cyan]\n"
-        "    Modo produccion. Envia emails directamente a reclutadores.\n"
+        "    Busca ofertas y envia emails directamente a reclutadores.\n"
         "    Muestra las ofertas encontradas y te deja seleccionar\n"
         "    a cuales aplicar antes de generar CVs y enviar.\n\n"
         "  [cyan]jobhunter status[/cyan]\n"
