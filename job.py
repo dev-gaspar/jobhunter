@@ -237,10 +237,10 @@ def _step_header(num, total, title, subtitle=None):
     if subtitle:
         console.print(f"  [dim]{subtitle}[/dim]")
 
-def _phase_header(title, icon=""):
+def _phase_header(title):
     """Print a styled phase header for run command."""
     console.print()
-    console.print(Rule(f"[bold]{icon}  {title}[/bold]", style="cyan"))
+    console.print(Rule(f"[bold]{title}[/bold]", style="cyan"))
     console.print()
 
 
@@ -877,7 +877,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
     queries = cfg.get("search_queries", ["enviar CV backend developer"])
 
     # ── Phase 1: Scrape ──
-    _phase_header("Fase 1 — Buscando en LinkedIn", "🔍")
+    _phase_header("Fase 1 — Buscando en LinkedIn")
     all_posts = []
     seen = set()
 
@@ -895,22 +895,28 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
             console.print("  [red]✗[/red] Sesion expirada. Ejecuta: [cyan]jobhunter login[/cyan]")
             browser.close(); return
 
-        for qi, query in enumerate(queries, 1):
-            console.print(f"  [dim]{qi:>2}/{len(queries)}[/dim]  {query[:55]}", end="")
-            posts = scrape_posts(page, query, time_filter=time_filter)
-            new_count = 0
-            for pi in posts:
-                key = pi["text"][:150]
-                if key not in seen:
-                    seen.add(key)
-                    all_posts.append(pi)
-                    new_count += 1
-            emails_found = sum(len(p.get("emails_found", [])) for p in posts)
-            if new_count > 0:
-                console.print(f"  [green]+{new_count}[/green] [dim]({emails_found} emails)[/dim]")
-            else:
-                console.print(f"  [dim]—[/dim]")
-            time.sleep(3)
+        total_q = len(queries)
+        total_emails_found = 0
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=30),
+            TextColumn("{task.completed}/{task.total}"),
+            TimeElapsedColumn(),
+            console=console,
+        ) as prog:
+            task = prog.add_task("Buscando...", total=total_q)
+            for qi, query in enumerate(queries, 1):
+                prog.update(task, description=f"[dim]{query[:45]}[/dim]")
+                posts = scrape_posts(page, query, time_filter=time_filter)
+                for pi in posts:
+                    key = pi["text"][:150]
+                    if key not in seen:
+                        seen.add(key)
+                        all_posts.append(pi)
+                total_emails_found = sum(len(p.get("emails_found",[])) for p in all_posts)
+                prog.advance(task)
+                time.sleep(3)
 
         # Screenshots (optional, quick)
         text_boxes = page.query_selector_all('span[data-testid="expandable-text-box"]')
@@ -924,25 +930,25 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
 
         browser.close()
 
-    total_emails = sum(len(p.get('emails_found',[])) for p in all_posts)
-    console.print()
-    console.print(f"  [bold]{len(all_posts)}[/bold] posts unicos  ·  [bold]{total_emails}[/bold] emails encontrados")
+    posts_with_emails = [p for p in all_posts if p.get("emails_found")]
+    posts_no_emails = len(all_posts) - len(posts_with_emails)
+    console.print(f"  [bold]{len(all_posts)}[/bold] posts  ·  [bold]{len(posts_with_emails)}[/bold] con email  ·  [dim]{posts_no_emails} sin email (omitidos)[/dim]")
 
-    if not all_posts:
+    if not posts_with_emails:
         console.print()
-        console.print("  [yellow]![/yellow] No se encontraron posts. Intenta con otros terminos o un periodo mas amplio.")
+        console.print("  [yellow]![/yellow] No se encontraron posts con email. Intenta un periodo mas amplio.")
         console.print("    [dim]Ej: jobhunter run --time week[/dim]")
         return
 
-    # ── Phase 2: Analyze ──
-    _phase_header("Fase 2 — Analizando con Gemini AI", "🤖")
+    # ── Phase 2: Analyze (only posts with emails to save tokens) ──
+    _phase_header("Fase 2 — Analizando con Gemini AI")
     offers = []
 
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
                   BarColumn(), TextColumn("{task.completed}/{task.total}"),
                   TimeElapsedColumn(), console=console) as prog:
-        task = prog.add_task("Analizando posts...", total=len(all_posts))
-        for post in all_posts:
+        task = prog.add_task("Analizando...", total=len(posts_with_emails))
+        for post in posts_with_emails:
             if len(post.get("text","")) < 50:
                 prog.advance(task); continue
             ss = post.get("screenshots",[None])[0] if post.get("screenshots") else None
@@ -1057,7 +1063,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
                 console.print(f"  [red]✗[/red] Formato invalido. Ej: 1,3,5 o 'all'")
 
     # ── Phase 3: Generate & Send ──
-    _phase_header("Fase 3 — Generando CVs y enviando", "📨")
+    _phase_header("Fase 3 — Generando CVs y enviando")
     sent = 0
     errors = 0
     results = []
@@ -1142,7 +1148,8 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
     # Summary
     err_str = f"[red]{errors}[/red]" if errors else "[dim]0[/dim]"
     console.print(Panel(
-        f"  [dim]Posts analizados[/dim]    {len(all_posts)}\n"
+        f"  [dim]Posts scraped[/dim]       {len(all_posts)}\n"
+        f"  [dim]Analizados[/dim]          {len(posts_with_emails)}  [dim](con email)[/dim]\n"
         f"  [dim]Ofertas[/dim]             {len(offers)}\n"
         f"  [dim]Enviados[/dim]            [bold green]{sent}[/bold green]\n"
         f"  [dim]Errores[/dim]             {err_str}",
