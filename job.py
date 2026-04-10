@@ -59,6 +59,11 @@ GEMINI_MODELS = [
 ]
 sys.path.insert(0, BASE_DIR)
 from src.cv_builder import generate_cv_pdf, get_cv_filename
+from src.offer_utils import (
+    deduplicate_offers_by_title_company,
+    extract_emails,
+    was_already_applied,
+)
 
 console = Console()
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
@@ -117,25 +122,6 @@ def save_kb(kb):
 def is_configured():
     cfg = load_config()
     return all(cfg.get(k) for k in ["gemini_api_key", "smtp_email", "smtp_password", "profile"])
-
-def was_already_applied(kb, company, job_title, cooldown_days=30):
-    """Check if we already sent an application for the same job title + company.
-    Returns True if a matching application exists within the cooldown period.
-    Different job titles at the same company are allowed."""
-    cutoff = datetime.now() - timedelta(days=cooldown_days)
-    norm = lambda s: re.sub(r'[^a-z0-9]', '', (s or '').lower())
-    nc, nj = norm(company), norm(job_title)
-    for app in kb.get("applications", []):
-        ac, aj = norm(app.get("company", "")), norm(app.get("job_title", ""))
-        if nc == ac and nj == aj:
-            try:
-                app_date = datetime.fromisoformat(app["date"])
-                if app_date > cutoff:
-                    return True
-            except:
-                return True  # If date is unparseable, assume recent
-    return False
-
 
 # ══════════════════════════════════════════════
 # GEMINI
@@ -200,9 +186,6 @@ def send_email(cfg, to, subject, body, cv_path=None, max_retries=3):
             if attempt == max_retries - 1:
                 raise
             time.sleep(3)
-
-def extract_emails(text):
-    return list(set(re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text)))
 
 def find_chrome():
     for p in [
@@ -970,18 +953,8 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
     offers_with_email = [o for o in offers if o.get("contact_email")]
     offers_no_email = [o for o in offers if not o.get("contact_email")]
 
-    # Deduplicate within this batch: same job_title (normalized) → keep first occurrence
-    norm = lambda s: re.sub(r'[^a-z0-9]', '', (s or '').lower())
-    seen_batch = set()
-    deduped = []
-    for o in offers_with_email:
-        # Use normalized title + email as key (same offer reposted by different people = same title)
-        key = norm(o.get("job_title", ""))
-        if key and key in seen_batch:
-            continue
-        if key:
-            seen_batch.add(key)
-        deduped.append(o)
+    # Deduplicate within this batch: same normalized title + company
+    deduped = deduplicate_offers_by_title_company(offers_with_email)
     batch_dupes = len(offers_with_email) - len(deduped)
     offers_with_email = deduped
 
@@ -1025,7 +998,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
     before_dedup = len(offers_with_email)
     offers_with_email = [
         o for o in offers_with_email
-        if not was_already_applied(kb, o.get("company", ""), o.get("job_title", ""))
+        if not was_already_applied(kb.get("applications", []), o.get("company", ""), o.get("job_title", ""))
     ]
     skipped = before_dedup - len(offers_with_email)
     if skipped:
