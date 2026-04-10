@@ -1034,7 +1034,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
     before_dedup = len(offers_with_email)
     offers_with_email = [
         o for o in offers_with_email
-        if not was_already_applied(kb.get("applications", []), o.get("company", ""), o.get("job_title", ""), o.get("contact_email"))
+        if not was_already_applied(kb.get("applications", []), o.get("company", ""), o.get("job_title", ""))
     ]
     skipped = before_dedup - len(offers_with_email)
     if skipped:
