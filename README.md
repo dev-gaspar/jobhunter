@@ -104,6 +104,10 @@ Durante `jobhunter setup` puedes elegir el modelo de IA:
 | `gemini-3-flash-preview` | Ultima generacion, rapido |
 | `gemini-3.1-pro-preview` | Ultima generacion, alta calidad |
 
+### Salario en la tabla
+
+Si la terminal tiene >= 130 columnas, la tabla de ofertas muestra una columna "Salario" con el dato extraido por el agente filtrador (cuando el post lo menciona).
+
 ### Filtrado de duplicados
 
 - Dentro del mismo batch: deduplicacion por titulo + empresa normalizado

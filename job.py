@@ -1061,6 +1061,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
     if offers_with_email:
         tw = shutil.get_terminal_size((80, 24)).columns
         wide = tw >= 100
+        extra_wide = tw >= 130
         table = Table(border_style="cyan", title="[bold]Ofertas encontradas[/bold]", expand=False, show_lines=False, padding=(0, 1))
         table.add_column("#", style="dim", width=3, justify="right")
         table.add_column("Puesto", max_width=28 if wide else 20, style="bold")
@@ -1069,6 +1070,8 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
         if wide:
             table.add_column("Ubicacion", max_width=18, style="dim")
             table.add_column("Lang", width=4, style="dim")
+        if extra_wide:
+            table.add_column("Salario", max_width=18, style="green")
         table.add_column("Email", max_width=26 if wide else 22, style="cyan")
         table.add_column("Post", width=6, justify="center")
         mode_icons = {"remote": "[green]Remoto[/green]", "hybrid": "[yellow]Hibrido[/yellow]", "onsite": "[red]Onsite[/red]", "unknown": "[dim]—[/dim]"}
@@ -1078,8 +1081,13 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
             if loc.lower() in ("null", "none", "n/a", "no especificado", "no mencionado"):
                 loc = "—"
             la = (o.get("language", "?"))[:4].upper()
+            salary = o.get("salary") or "—"
+            if str(salary).lower() in ("null", "none", "n/a", "no mencionado", "no especificado"):
+                salary = "—"
             post_link = f"[link={o['post_url']}]Ver[/link]" if o.get("post_url") else "[dim]—[/dim]"
-            if wide:
+            if extra_wide:
+                table.add_row(str(i), o["job_title"][:28], o["company"][:16], wm, loc[:18], la, str(salary)[:18], o["contact_email"], post_link)
+            elif wide:
                 table.add_row(str(i), o["job_title"][:28], o["company"][:16], wm, loc[:18], la, o["contact_email"], post_link)
             else:
                 table.add_row(str(i), o["job_title"][:20], o["company"][:12], wm, o["contact_email"], post_link)
