@@ -229,7 +229,7 @@ def _phase_header(title):
 
 def cmd_setup():
     console.print(get_banner())
-    total_steps = 8
+    total_steps = 9
 
     cfg = load_config()
 
@@ -353,8 +353,31 @@ SOLO JSON valido.""", b64, "application/pdf")
     cfg["search_languages"] = lang_choice
     console.print(f"  [green]✓[/green] {lang_options[lang_choice]}")
 
-    # 7. Modalidad de trabajo
-    _step_header(7, total_steps, "Que modalidad de trabajo buscas?")
+    # 7. Idiomas que domina el usuario
+    _step_header(7, total_steps, "Que idiomas manejas y a que nivel?", "Se usara para filtrar ofertas y para el CV. Ej: Espanol:Nativo, Ingles:B1")
+    console.print("  [dim]Niveles: Nativo, Avanzado (C1-C2), Intermedio (B1-B2), Basico (A1-A2)[/dim]")
+    existing_langs = cfg.get("user_languages", [])
+    if existing_langs:
+        console.print(f"  [dim]Actual: {', '.join(f'{l['language']}:{l['level']}' for l in existing_langs)}[/dim]")
+    default_langs = ", ".join(f"{l['language']}:{l['level']}" for l in existing_langs) if existing_langs else ""
+    langs_input = Prompt.ask("  Idiomas", default=default_langs)
+    user_languages = []
+    for part in langs_input.split(","):
+        part = part.strip()
+        if ":" in part:
+            lang_name, level = part.split(":", 1)
+            user_languages.append({"language": lang_name.strip(), "level": level.strip()})
+        elif part:
+            user_languages.append({"language": part.strip(), "level": "Nativo"})
+    cfg["user_languages"] = user_languages
+    if user_languages:
+        for ul in user_languages:
+            console.print(f"  [green]✓[/green] {ul['language']} — {ul['level']}")
+    else:
+        console.print("  [yellow]![/yellow] Sin idiomas configurados")
+
+    # 8. Modalidad de trabajo
+    _step_header(8, total_steps, "Que modalidad de trabajo buscas?")
     mode_options = {"1": "Remoto", "2": "Hibrido", "3": "Presencial", "4": "Cualquiera"}
     for k, v in mode_options.items():
         console.print(f"  [cyan]{k}.[/cyan] {v}")
@@ -366,7 +389,7 @@ SOLO JSON valido.""", b64, "application/pdf")
     cfg["work_mode_label"] = mode_options[mode_choice]
     console.print(f"  [green]✓[/green] {mode_options[mode_choice]}")
 
-    # 7b. Ubicacion (si hibrido o presencial)
+    # 8b. Ubicacion (si hibrido o presencial)
     if mode_choice in ("2", "3"):
         console.print()
         console.print(f"  [bold]Tu ubicacion[/bold]")
@@ -376,8 +399,8 @@ SOLO JSON valido.""", b64, "application/pdf")
     else:
         cfg["user_location"] = cfg.get("user_location", "")
 
-    # 8. Preferencias de empleo
-    _step_header(8, total_steps, "Que tipo de empleo buscas?")
+    # 9. Preferencias de empleo
+    _step_header(9, total_steps, "Que tipo de empleo buscas?")
 
     if profile.get("skills"):
         with console.status("  [dim]Generando sugerencias de tu CV...[/dim]"):
@@ -640,6 +663,7 @@ def agent_filter(cfg, text, ss=None):
     profile_skills = profile.get("skills", {})
     work_mode_label = cfg.get("work_mode_label", "Cualquiera")
     user_location = cfg.get("user_location", "")
+    user_languages = cfg.get("user_languages", [])
 
     work_mode_rule = ""
     if work_mode_label.lower() == "remoto":
@@ -656,6 +680,7 @@ PERFIL DEL CANDIDATO:
 - Busca empleo como: {job_types}
 - Modalidad preferida: {work_mode_label}
 {f'- Ubicacion del candidato: {user_location}' if user_location else ''}
+- Idiomas del candidato: {', '.join(f"{l['language']} ({l['level']})" for l in user_languages) if user_languages else 'No especificados'}
 - Resumen: {profile_summary[:300]}
 - Habilidades: {json.dumps(profile_skills) if isinstance(profile_skills, dict) else str(profile_skills)[:500]}
 
@@ -668,6 +693,7 @@ REGLAS DE FILTRADO:
 - Solo ofertas de TRABAJO reales (no cursos, certificaciones, logros personales, contenido general, publicidad)
 - Relevante si el puesto tiene relacion con lo que busca el candidato: {job_types}
 {work_mode_rule}
+- Si la oferta REQUIERE un idioma con nivel avanzado o fluido que el candidato NO tiene a ese nivel, marcar is_relevant=false. Los idiomas del candidato son: {', '.join(f"{l['language']} ({l['level']})" for l in user_languages) if user_languages else 'No especificados'}
 - Extraer SIEMPRE el email si existe en el texto
 - Extraer empresa, titulo, descripcion COMPLETA con todos los detalles
 - Extraer requisitos especificos (habilidades, herramientas, anos de experiencia, idiomas, etc.)
@@ -715,6 +741,8 @@ REGLAS CRITICAS:
 - Usa la MISMA TERMINOLOGIA de la oferta. Si la oferta dice "Community Manager", el CV dice "Community Manager". Si dice "Backend Developer", dice "Backend Developer".
 - NO traduzcas terminos que en la industria se usan en su idioma original
 - Adapta TODO el CV al sector y lenguaje de la oferta
+- PROHIBIDO INVENTAR. No agregues habilidades, tecnologias, idiomas, certificaciones, logros o experiencias que NO esten en el perfil del candidato. Solo puedes REORDENAR, REFORMULAR y DESTACAR lo que YA existe. Si la oferta pide algo que el candidato no tiene, simplemente no lo menciones.
+- IDIOMAS: Solo incluye los idiomas que el candidato realmente maneja. Los idiomas del candidato son: {', '.join(f"{l['language']} ({l['level']})" for l in cfg.get('user_languages', [])) if cfg.get('user_languages') else 'No especificados'}. NO inventes niveles de idioma ni agregues idiomas que no esten en esta lista.
 
 CANDIDATO:
 {json.dumps(p, indent=2)}
@@ -765,6 +793,9 @@ JSON:
     ],
     "education": [
         {{"institution": "institucion", "degree": "titulo", "period": "periodo"}}
+    ],
+    "languages": [
+        {{"language": "idioma", "level": "nivel real del candidato"}}
     ]
 }}
 SOLO JSON valido."""
@@ -773,7 +804,7 @@ SOLO JSON valido."""
 
 
 # ── AGENT 3: EMAIL WRITER (genera emails de aplicacion) ──
-def agent_email(cfg, job):
+def agent_email(cfg, job, cv_data=None):
     """Agent specialized in writing personalized application emails."""
     p = cfg["profile"]
     portfolio_line = f"\n- Portfolio: {p['portfolio']}" if p.get('portfolio') else ""
@@ -804,7 +835,12 @@ IDIOMA: Escribe TODO el email en {lang_name}. La oferta esta en {lang_name}.
 CANDIDATO:
 - Nombre: {p.get('name', '')}{portfolio_line}{linkedin_line}
 - Busca empleo como: {cfg.get('job_types_raw', '')}
-
+{f"""
+CV GENERADO PARA ESTA OFERTA (usa estos datos para que el email sea coherente con el CV adjunto):
+- Titulo: {cv_data.get('title', '')}
+- Resumen: {cv_data.get('summary', '')}
+- Skills destacadas: {', '.join(cv_data.get('skills_highlighted', [])[:8])}
+""" if cv_data else ''}
 OFERTA:
 - Puesto: {job.get('job_title', '')}
 - Empresa: {job.get('company', '')}
@@ -819,7 +855,7 @@ REGLAS ESTRICTAS:
 5. Debe sonar como si {p.get('name', 'el candidato')} lo escribiera personalmente
 6. PROHIBIDO frases de plantilla: "me emociona", "me apasiona profundamente", "me encantaria unirme", "I am excited", "I am passionate"
 7. NO propongas agendar llamadas ni reuniones
-8. Menciona 1-2 logros CONCRETOS con numeros que sean relevantes para ESTA oferta
+8. Menciona 1-2 logros CONCRETOS con numeros que sean relevantes para ESTA oferta. PROHIBIDO inventar logros, cifras o habilidades que no esten en el perfil del candidato{' o en el CV generado' if cv_data else ''}.
 9. El asunto debe ser corto y directo (max 8 palabras)
 10. Firma simple en texto plano: {', '.join(sig_parts)}
 
@@ -998,7 +1034,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
     before_dedup = len(offers_with_email)
     offers_with_email = [
         o for o in offers_with_email
-        if not was_already_applied(kb.get("applications", []), o.get("company", ""), o.get("job_title", ""))
+        if not was_already_applied(kb.get("applications", []), o.get("company", ""), o.get("job_title", ""), o.get("contact_email"))
     ]
     skipped = before_dedup - len(offers_with_email)
     if skipped:
@@ -1076,7 +1112,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
         for retry in range(3):
             with console.status(f"       [dim]Generando email...{' (reintento)' if retry > 0 else ''}[/dim]"):
                 try:
-                    edata = agent_email(cfg, job)
+                    edata = agent_email(cfg, job, cv_data=cv_data)
                     console.print(f"       [green]✓[/green] Email: {edata['subject'][:50]}")
                     break
                 except Exception as e:

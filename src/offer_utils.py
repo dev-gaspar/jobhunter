@@ -11,15 +11,21 @@ def extract_emails(text):
     return list(set(re.findall(pattern, text or "")))
 
 
-def was_already_applied(applications, company, job_title, cooldown_days=30):
+def was_already_applied(applications, company, job_title, recruiter_email=None, cooldown_days=30):
     cutoff = datetime.now() - timedelta(days=cooldown_days)
     normalized_company = normalize_text(company)
     normalized_title = normalize_text(job_title)
+    normalized_email = (recruiter_email or "").strip().lower()
 
     for app in applications or []:
         app_company = normalize_text(app.get("company", ""))
         app_title = normalize_text(app.get("job_title", ""))
-        if normalized_company == app_company and normalized_title == app_title:
+        app_email = (app.get("recruiter_email") or "").strip().lower()
+        # Match by company+title OR by same recruiter email + same company
+        matched = (normalized_company == app_company and normalized_title == app_title)
+        if not matched and normalized_email and app_email:
+            matched = (normalized_email == app_email and normalized_company == app_company)
+        if matched:
             try:
                 app_date = datetime.fromisoformat(app["date"])
                 if app_date > cutoff:
