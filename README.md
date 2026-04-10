@@ -63,12 +63,12 @@ Aplicar a: q           Cancelar
 Despues del analisis, exporta las ofertas filtradas a CSV o JSON:
 
 ```
-jobhunter run --export csv
-jobhunter run --export json
-jobhunter --test mi@email.com --export csv
+jobhunter run --export csv ofertas.csv
+jobhunter run --export json ~/ofertas.json
+jobhunter --test mi@email.com --export csv resultado.csv
 ```
 
-Se guarda en `output/ofertas_YYYYMMDD_HHMMSS.csv` (o `.json`). Compatible con el resto del flujo — exportar no cancela el envio.
+La ruta es obligatoria. Compatible con el resto del flujo — exportar no cancela el envio.
 
 ### Aplicar automaticamente
 

@@ -924,7 +924,7 @@ JSON (sin markdown, sin bloques de codigo):
 # ══════════════════════════════════════════════
 # RUN
 # ══════════════════════════════════════════════
-def cmd_run(test_email=None, time_filter="24h", auto_apply=False, export_fmt=None):
+def cmd_run(test_email=None, time_filter="24h", auto_apply=False, export_fmt=None, export_path=None):
     cfg = load_config()
     kb = load_kb()
 
@@ -1119,25 +1119,21 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, export_fmt=Non
         return
 
     # Export offers if requested
-    if export_fmt and offers_with_email:
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        export_dir = os.path.join(BASE_DIR, "output")
-        os.makedirs(export_dir, exist_ok=True)
+    if export_fmt and export_path and offers_with_email:
+        os.makedirs(os.path.dirname(os.path.abspath(export_path)) or ".", exist_ok=True)
         export_fields = ["job_title", "company", "contact_email", "work_mode", "location", "salary", "language", "post_url"]
         if export_fmt == "csv":
             import csv
-            path = os.path.join(export_dir, f"ofertas_{ts}.csv")
-            with open(path, "w", newline="", encoding="utf-8") as f:
+            with open(export_path, "w", newline="", encoding="utf-8") as f:
                 w = csv.DictWriter(f, fieldnames=export_fields, extrasaction="ignore")
                 w.writeheader()
                 w.writerows(offers_with_email)
-            console.print(f"  [green]>[/green] Exportado: {path}")
+            console.print(f"  [green]>[/green] Exportado: {export_path}")
         elif export_fmt == "json":
-            path = os.path.join(export_dir, f"ofertas_{ts}.json")
             export_data = [{k: o.get(k) for k in export_fields} for o in offers_with_email]
-            with open(path, "w", encoding="utf-8") as f:
+            with open(export_path, "w", encoding="utf-8") as f:
                 json.dump(export_data, f, indent=2, ensure_ascii=False)
-            console.print(f"  [green]>[/green] Exportado: {path}")
+            console.print(f"  [green]>[/green] Exportado: {export_path}")
 
     # Use only offers with valid email for Phase 3
     offers = offers_with_email
@@ -1530,7 +1526,7 @@ def cmd_help():
     opts.add_row("--time week", "Esta semana")
     opts.add_row("--time month", "Este mes")
     opts.add_row("--auto", "Aplicar a todas sin preguntar")
-    opts.add_row("--export csv|json", "Exportar ofertas a archivo [dim](run)[/dim]")
+    opts.add_row("--export csv|json ruta", "Exportar ofertas a archivo [dim](run)[/dim]")
     opts.add_row("--last N", "Ultimas N aplicaciones [dim](history)[/dim]")
     opts.add_row("--company \"...\"", "Filtrar por empresa [dim](history)[/dim]")
     opts.add_row("--since YYYY-MM-DD", "Desde fecha [dim](history)[/dim]")
@@ -1597,9 +1593,11 @@ def main():
     tf = parse_time_filter(sys.argv)
     auto = "--auto" in sys.argv
     export = None
+    export_path = None
     for i, a in enumerate(sys.argv):
         if a == "--export" and i + 1 < len(sys.argv) and sys.argv[i + 1] in ("csv", "json"):
             export = sys.argv[i + 1]
+            export_path = sys.argv[i + 2] if i + 2 < len(sys.argv) and not sys.argv[i + 2].startswith("--") else None
 
     if cmd in ("setup",):
         cmd_setup()
@@ -1633,9 +1631,15 @@ def main():
     elif cmd in ("help", "--help", "-h"):
         cmd_help()
     elif cmd == "--test" and len(sys.argv) > 2:
-        cmd_run(test_email=sys.argv[2], time_filter=tf, auto_apply=auto, export_fmt=export)
+        if export and not export_path:
+            console.print("  [red]![/red] --export requiere ruta. Ej: jobhunter --test email --export csv ofertas.csv")
+            return
+        cmd_run(test_email=sys.argv[2], time_filter=tf, auto_apply=auto, export_fmt=export, export_path=export_path)
     elif cmd in ("run",):
-        cmd_run(time_filter=tf, auto_apply=auto, export_fmt=export)
+        if export and not export_path:
+            console.print("  [red]![/red] --export requiere ruta. Ej: jobhunter run --export csv ofertas.csv")
+            return
+        cmd_run(time_filter=tf, auto_apply=auto, export_fmt=export, export_path=export_path)
     else:
         console.print(get_banner())
         console.print(f"  [red]✗[/red] Comando desconocido: [bold]{cmd}[/bold]")
