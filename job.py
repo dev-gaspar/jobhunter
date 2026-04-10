@@ -646,7 +646,36 @@ def scrape_posts(page, query, max_scroll=4, time_filter="24h"):
     }""")
     page.wait_for_timeout(2000)
 
-    return page.evaluate(r"""() => {
+    # Extract post URLs via 3-dot menu (contains activity URN in "Report" link)
+    post_urls = {}
+    try:
+        listitems = page.locator('[role="listitem"]')
+        for i in range(listitems.count()):
+            try:
+                menu_btn = listitems.nth(i).locator('button[aria-label*="controles"]').first
+                if not menu_btn.is_visible(timeout=500):
+                    continue
+                menu_btn.click()
+                page.wait_for_timeout(600)
+                activity_id = page.evaluate(r"""() => {
+                    const links = document.querySelectorAll('a[href*="entityUrn"]');
+                    for (const l of links) {
+                        const m = (l.getAttribute('href') || '').match(/activity%3A(\d+)/);
+                        if (m) return m[1];
+                    }
+                    return null;
+                }""")
+                if activity_id:
+                    post_urls[i] = f"https://www.linkedin.com/feed/update/urn:li:activity:{activity_id}"
+                page.keyboard.press("Escape")
+                page.wait_for_timeout(300)
+            except Exception:
+                try: page.keyboard.press("Escape")
+                except: pass
+    except Exception:
+        pass
+
+    posts = page.evaluate(r"""() => {
         const boxes = document.querySelectorAll('span[data-testid="expandable-text-box"]');
         const posts = []; const seen = new Set();
         boxes.forEach((box, idx) => {
@@ -660,6 +689,12 @@ def scrape_posts(page, query, max_scroll=4, time_filter="24h"):
         });
         return posts;
     }""")
+
+    # Attach URLs to posts by matching index
+    for post in posts:
+        post["post_url"] = post_urls.get(post["index"])
+
+    return posts
 
 
 # ══════════════════════════════════════════════
@@ -996,6 +1031,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
             if a.get("is_job") and a.get("is_relevant", True):
                 a["job_title"] = a.get("job_title") or "Software Developer"
                 a["company"] = a.get("company") or "Empresa"
+                a["post_url"] = post.get("post_url")
                 offers.append(a)
             prog.advance(task)
             time.sleep(1.5)
@@ -1034,6 +1070,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
             table.add_column("Ubicacion", max_width=18, style="dim")
             table.add_column("Lang", width=4, style="dim")
         table.add_column("Email", max_width=26 if wide else 22, style="cyan")
+        table.add_column("Post", width=6, justify="center")
         mode_icons = {"remote": "[green]Remoto[/green]", "hybrid": "[yellow]Hibrido[/yellow]", "onsite": "[red]Onsite[/red]", "unknown": "[dim]—[/dim]"}
         for i, o in enumerate(offers_with_email, 1):
             wm = mode_icons.get(o.get("work_mode", "unknown"), "[dim]—[/dim]")
@@ -1041,10 +1078,11 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
             if loc.lower() in ("null", "none", "n/a", "no especificado", "no mencionado"):
                 loc = "—"
             la = (o.get("language", "?"))[:4].upper()
+            post_link = f"[link={o['post_url']}]Ver[/link]" if o.get("post_url") else "[dim]—[/dim]"
             if wide:
-                table.add_row(str(i), o["job_title"][:28], o["company"][:16], wm, loc[:18], la, o["contact_email"])
+                table.add_row(str(i), o["job_title"][:28], o["company"][:16], wm, loc[:18], la, o["contact_email"], post_link)
             else:
-                table.add_row(str(i), o["job_title"][:20], o["company"][:12], wm, o["contact_email"])
+                table.add_row(str(i), o["job_title"][:20], o["company"][:12], wm, o["contact_email"], post_link)
         console.print(table)
 
     if not offers_with_email:
@@ -1160,6 +1198,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
                 "date": datetime.now().isoformat(), "job_title": title,
                 "company": company, "recruiter_email": rec_email,
                 "sent_to": to, "mode": mode,
+                "post_url": job.get("post_url"),
             })
         except Exception as e:
             console.print(f"       [red]✗[/red] Error envio: {e}")
@@ -1369,11 +1408,13 @@ def cmd_history(last=10, company_filter=None, since=None, show_all=False):
     table.add_column("Empresa", max_width=25)
     table.add_column("Email reclutador", style="dim", max_width=30)
     table.add_column("Modo", width=6)
+    table.add_column("Post", width=6, justify="center")
 
     for i, app in enumerate(apps, 1):
         date_str = app.get("date", "")[:10]
         mode = app.get("mode", "RUN")
         mode_style = "[yellow]TEST[/yellow]" if mode == "TEST" else "[green]RUN[/green]"
+        post_link = f"[link={app['post_url']}]Ver[/link]" if app.get("post_url") else "[dim]—[/dim]"
         table.add_row(
             str(i),
             date_str,
@@ -1381,6 +1422,7 @@ def cmd_history(last=10, company_filter=None, since=None, show_all=False):
             (app.get("company") or "-")[:25],
             (app.get("recruiter_email") or app.get("sent_to") or "-")[:30],
             mode_style,
+            post_link,
         )
 
     console.print()
