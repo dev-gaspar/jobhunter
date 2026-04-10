@@ -58,6 +58,20 @@ Aplicar a: all         Todas las ofertas
 Aplicar a: q           Cancelar
 ```
 
+### Exportar ofertas
+
+Despues del analisis, exporta las ofertas filtradas a CSV o JSON:
+
+```
+jobhunter run --export csv
+jobhunter run --export json
+jobhunter --test mi@email.com --export csv
+```
+
+Se guarda en `output/ofertas_YYYYMMDD_HHMMSS.csv` (o `.json`). Compatible con el resto del flujo — exportar no cancela el envio.
+
+### Aplicar automaticamente
+
 Para saltar la seleccion y enviar a todas automaticamente:
 
 ```
