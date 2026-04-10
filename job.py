@@ -229,7 +229,7 @@ def _phase_header(title):
 
 def cmd_setup():
     console.print(get_banner())
-    total_steps = 9
+    total_steps = 10
 
     cfg = load_config()
 
@@ -341,8 +341,29 @@ SOLO JSON valido.""", b64, "application/pdf")
 
     cfg["profile"] = profile
 
-    # 6. Idiomas de busqueda
-    _step_header(6, total_steps, "En que idiomas buscar ofertas?", "Las ofertas y CVs se generaran en el idioma de cada oferta")
+    # 6. Plantilla de CV
+    _step_header(6, total_steps, "Plantilla de CV", "Estilo visual del PDF generado")
+    from src.cv_templates import TEMPLATES, DEFAULT_TEMPLATE
+    current_tmpl = cfg.get("cv_template", DEFAULT_TEMPLATE)
+    tmpl_keys = list(TEMPLATES.keys())
+    for i, key in enumerate(tmpl_keys, 1):
+        t = TEMPLATES[key]
+        marker = " [green]<< actual[/green]" if key == current_tmpl else ""
+        console.print(f"  [cyan]{i}.[/cyan] {t['name']} — [dim]{t['description']}[/dim]{marker}")
+    while True:
+        tmpl_choice = Prompt.ask("  Selecciona", default=str(tmpl_keys.index(current_tmpl) + 1))
+        try:
+            idx = int(tmpl_choice) - 1
+            if 0 <= idx < len(tmpl_keys):
+                cfg["cv_template"] = tmpl_keys[idx]
+                console.print(f"  [green]✓[/green] {TEMPLATES[tmpl_keys[idx]]['name']}")
+                break
+        except ValueError:
+            pass
+        console.print(f"  [red]![/red] Selecciona un numero del 1 al {len(tmpl_keys)}")
+
+    # 7. Idiomas de busqueda
+    _step_header(7, total_steps, "En que idiomas buscar ofertas?", "Las ofertas y CVs se generaran en el idioma de cada oferta")
     lang_options = {"1": "Espanol", "2": "Ingles", "3": "Espanol e Ingles"}
     for k, v in lang_options.items():
         console.print(f"  [cyan]{k}.[/cyan] {v}")
@@ -353,8 +374,8 @@ SOLO JSON valido.""", b64, "application/pdf")
     cfg["search_languages"] = lang_choice
     console.print(f"  [green]✓[/green] {lang_options[lang_choice]}")
 
-    # 7. Idiomas que domina el usuario
-    _step_header(7, total_steps, "Que idiomas manejas y a que nivel?", "Se usara para filtrar ofertas y para el CV. Ej: Espanol:Nativo, Ingles:B1")
+    # 8. Idiomas que domina el usuario
+    _step_header(8, total_steps, "Que idiomas manejas y a que nivel?", "Se usara para filtrar ofertas y para el CV. Ej: Espanol:Nativo, Ingles:B1")
     console.print("  [dim]Niveles: Nativo, Avanzado (C1-C2), Intermedio (B1-B2), Basico (A1-A2)[/dim]")
     existing_langs = cfg.get("user_languages", [])
     if existing_langs:
@@ -376,8 +397,8 @@ SOLO JSON valido.""", b64, "application/pdf")
     else:
         console.print("  [yellow]![/yellow] Sin idiomas configurados")
 
-    # 8. Modalidad de trabajo
-    _step_header(8, total_steps, "Que modalidad de trabajo buscas?")
+    # 9. Modalidad de trabajo
+    _step_header(9, total_steps, "Que modalidad de trabajo buscas?")
     mode_options = {"1": "Remoto", "2": "Hibrido", "3": "Presencial", "4": "Cualquiera"}
     for k, v in mode_options.items():
         console.print(f"  [cyan]{k}.[/cyan] {v}")
@@ -389,7 +410,7 @@ SOLO JSON valido.""", b64, "application/pdf")
     cfg["work_mode_label"] = mode_options[mode_choice]
     console.print(f"  [green]✓[/green] {mode_options[mode_choice]}")
 
-    # 8b. Ubicacion (si hibrido o presencial)
+    # 9b. Ubicacion (si hibrido o presencial)
     if mode_choice in ("2", "3"):
         console.print()
         console.print(f"  [bold]Tu ubicacion[/bold]")
@@ -399,8 +420,8 @@ SOLO JSON valido.""", b64, "application/pdf")
     else:
         cfg["user_location"] = cfg.get("user_location", "")
 
-    # 9. Preferencias de empleo
-    _step_header(9, total_steps, "Que tipo de empleo buscas?")
+    # 10. Preferencias de empleo
+    _step_header(10, total_steps, "Que tipo de empleo buscas?")
 
     if profile.get("skills"):
         with console.status("  [dim]Generando sugerencias de tu CV...[/dim]"):
@@ -1094,7 +1115,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
                     cv_fn = get_cv_filename(company, title)
                     cv_path = os.path.join(BASE_DIR, "output", "cvs", cv_fn)
                     os.makedirs(os.path.dirname(cv_path), exist_ok=True)
-                    generate_cv_pdf(cv_data, cfg["profile"], cv_path, title, company, language=job.get("language", "es"))
+                    generate_cv_pdf(cv_data, cfg["profile"], cv_path, title, company, language=job.get("language", "es"), template=cfg.get("cv_template", "modern"))
                     console.print(f"       [green]✓[/green] CV generado")
                     break
                 except Exception as e:
