@@ -18,6 +18,7 @@ jobhunter --test email@test.com      # Test mode (sends to your email, not recru
 jobhunter optimize                   # AI-powered search query optimization
 jobhunter optimize "feedback"        # Optimization with custom context
 jobhunter history                    # Application history (--last N, --company, --since, --all)
+jobhunter blacklist                  # View/add/remove blocked companies
 jobhunter status                     # Config & stats dashboard
 jobhunter update                     # Git pull latest version
 ```

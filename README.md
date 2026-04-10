@@ -30,6 +30,9 @@ jobhunter run                            Buscar y enviar a reclutadores
 jobhunter optimize                       Optimizar queries de busqueda con IA
 jobhunter optimize "..."                 Optimizar con feedback especifico
 jobhunter history                        Historial de aplicaciones enviadas
+jobhunter blacklist                      Ver empresas bloqueadas
+jobhunter blacklist add "Empresa"        Bloquear empresa
+jobhunter blacklist remove "Empresa"     Desbloquear empresa
 jobhunter status                         Ver configuracion y estadisticas
 jobhunter update                         Actualizar a la ultima version
 jobhunter help                           Ver ayuda completa
@@ -107,6 +110,18 @@ Durante `jobhunter setup` puedes elegir el modelo de IA:
 ### Salario en la tabla
 
 Si la terminal tiene >= 130 columnas, la tabla de ofertas muestra una columna "Salario" con el dato extraido por el agente filtrador (cuando el post lo menciona).
+
+### Blacklist de empresas
+
+Bloquea empresas para que sus ofertas se filtren automaticamente:
+
+```
+jobhunter blacklist                      Ver lista
+jobhunter blacklist add "Empresa X"      Bloquear
+jobhunter blacklist remove "Empresa X"   Desbloquear
+```
+
+Se guarda en `knowledge.json` bajo `rejected_companies`.
 
 ### Filtrado de duplicados
 

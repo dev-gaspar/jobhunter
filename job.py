@@ -1051,10 +1051,17 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False):
     batch_dupes = len(offers_with_email) - len(deduped)
     offers_with_email = deduped
 
+    # Filter blacklisted companies
+    rejected = [r.lower() for r in kb.get("rejected_companies", [])]
+    before_bl = len(offers_with_email)
+    offers_with_email = [o for o in offers_with_email if (o.get("company") or "").lower() not in rejected]
+    blacklisted = before_bl - len(offers_with_email)
+
     console.print(
         f"  [bold]{len(offers)}[/bold] ofertas  ·  "
         f"[green]{len(offers_with_email)}[/green] con email  ·  "
-        f"[dim]{batch_dupes} duplicadas  ·  {len(offers_no_email)} sin email[/dim]"
+        f"[dim]{batch_dupes} duplicadas  ·  {len(offers_no_email)} sin email"
+        f"{f'  ·  {blacklisted} bloqueadas' if blacklisted else ''}[/dim]"
     )
     console.print()
 
@@ -1438,6 +1445,42 @@ def cmd_history(last=10, company_filter=None, since=None, show_all=False):
     console.print()
 
 
+def cmd_blacklist(action=None, company=None):
+    """Manage company blacklist."""
+    kb = load_kb()
+    rejected = kb.get("rejected_companies", [])
+
+    if action == "add" and company:
+        norm = company.strip()
+        if norm.lower() in [r.lower() for r in rejected]:
+            console.print(f"  [yellow]![/yellow] '{norm}' ya esta en la blacklist.")
+        else:
+            rejected.append(norm)
+            kb["rejected_companies"] = rejected
+            save_kb(kb)
+            console.print(f"  [green]>[/green] '{norm}' agregada a la blacklist.")
+    elif action == "remove" and company:
+        norm = company.strip().lower()
+        match = [r for r in rejected if r.lower() == norm]
+        if match:
+            rejected.remove(match[0])
+            kb["rejected_companies"] = rejected
+            save_kb(kb)
+            console.print(f"  [green]>[/green] '{match[0]}' removida de la blacklist.")
+        else:
+            console.print(f"  [yellow]![/yellow] '{company}' no esta en la blacklist.")
+    else:
+        # List
+        if not rejected:
+            console.print("  [dim]Blacklist vacia. Usa: jobhunter blacklist add \"Empresa\"[/dim]")
+            return
+        console.print()
+        for i, r in enumerate(rejected, 1):
+            console.print(f"  [cyan]{i}.[/cyan] {r}")
+        console.print(f"\n  [dim]{len(rejected)} empresas bloqueadas[/dim]")
+        console.print()
+
+
 def cmd_help():
     console.print(get_banner())
 
@@ -1452,6 +1495,7 @@ def cmd_help():
     cmds.add_row("jobhunter optimize", "Optimizar queries con IA")
     cmds.add_row("jobhunter optimize \"...\"", "Optimizar con feedback tuyo")
     cmds.add_row("jobhunter history", "Historial de aplicaciones")
+    cmds.add_row("jobhunter blacklist", "Ver/agregar/quitar empresas bloqueadas")
     cmds.add_row("jobhunter status", "Ver configuracion y estadisticas")
     cmds.add_row("jobhunter update", "Actualizar desde GitHub")
     cmds.add_row("jobhunter help", "Mostrar esta ayuda")
@@ -1552,6 +1596,10 @@ def main():
             elif a == "--since" and i + 1 < len(sys.argv):
                 since = sys.argv[i + 1]
         cmd_history(last=last, company_filter=company_filter, since=since, show_all=show_all)
+    elif cmd in ("blacklist",):
+        action = sys.argv[2] if len(sys.argv) > 2 else None
+        company = sys.argv[3] if len(sys.argv) > 3 else None
+        cmd_blacklist(action, company)
     elif cmd in ("status",):
         cmd_status()
     elif cmd in ("update",):
