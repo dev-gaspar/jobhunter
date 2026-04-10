@@ -9,7 +9,7 @@ JobHunter AI — Spanish-language Python CLI that automates job searching on Lin
 ## Commands
 
 ```bash
-jobhunter setup                      # Interactive 8-step setup wizard
+jobhunter setup                      # Interactive 10-step setup wizard
 jobhunter login                      # One-time LinkedIn auth (persistent Chrome session)
 jobhunter run                        # Full pipeline: scrape → filter → generate → send
 jobhunter run --auto                 # Skip interactive selection, apply to all
@@ -17,11 +17,12 @@ jobhunter run --time 24h|week|month  # Date filter for LinkedIn searches
 jobhunter --test email@test.com      # Test mode (sends to your email, not recruiters)
 jobhunter optimize                   # AI-powered search query optimization
 jobhunter optimize "feedback"        # Optimization with custom context
+jobhunter history                    # Application history (--last N, --company, --since, --all)
 jobhunter status                     # Config & stats dashboard
 jobhunter update                     # Git pull latest version
 ```
 
-No formal test suite exists. Test manually with `jobhunter --test your@email.com`.
+Unit tests: `python -m unittest discover -s tests -p "test_*.py"`. Manual E2E: `jobhunter --test your@email.com`.
 
 ## Architecture
 
@@ -29,9 +30,9 @@ No formal test suite exists. Test manually with `jobhunter --test your@email.com
 
 ### Multi-Agent System (4 Gemini Agents)
 
-1. **Filter Agent** — analyzes scraped LinkedIn posts, determines if they're real job offers relevant to user profile
-2. **CV Writer Agent** — generates personalized CVs (PDF via ReportLab) adapted to each offer's requirements and language
-3. **Email Writer Agent** — creates short, human-sounding application emails (~100 words) with concrete achievements
+1. **Filter Agent** — analyzes scraped LinkedIn posts, determines if they're real job offers relevant to user profile. Filters by language requirements vs user proficiency.
+2. **CV Writer Agent** — generates personalized CVs (PDF via ReportLab) adapted to each offer's requirements and language. Cannot invent skills/languages/achievements not in profile.
+3. **Email Writer Agent** — creates short, human-sounding application emails (~100 words) with concrete achievements. Receives CV data for coherence.
 4. **Optimizer Agent** — analyzes profile + history to suggest better search queries
 
 All agents call Gemini via direct HTTP POST (`call_gemini()` / `call_gemini_vision()`), not SDK. Retry logic with exponential backoff handles 429/5xx errors.
@@ -48,7 +49,9 @@ All agents call Gemini via direct HTTP POST (`call_gemini()` / `call_gemini_visi
 ### Key Files
 
 - `job.py` — main script, all CLI commands, scraping, agents, email sending
-- `src/cv_builder.py` — ReportLab PDF generation for professional CVs
+- `src/cv_builder.py` — CV generation router + ATS text normalization
+- `src/cv_templates/` — 4 PDF templates: modern (default), minimal, classic, compact
+- `src/offer_utils.py` — deduplication, email extraction, cooldown checking
 - `config.json` — user config (API keys, SMTP credentials, profile, search queries) — **git-ignored**
 - `knowledge.json` — execution history and application log — **git-ignored**
 - `.session/` — Playwright persistent Chrome session — **git-ignored**
@@ -67,5 +70,5 @@ All CLI output, prompts, and user-facing text is in **Spanish**. Agent prompts a
 
 ## CI/CD
 
-- `.github/workflows/deploy.yml` — pushes `web/` to GitHub Pages on main push
+- `.github/workflows/deploy.yml` — pushes `web/` to GitHub Pages on changes to `web/` only
 - `.github/workflows/release.yml` — on tag push (v*), validates installers, creates GitHub release

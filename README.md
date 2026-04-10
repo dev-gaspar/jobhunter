@@ -29,6 +29,7 @@ jobhunter --test email@test.com          Prueba (envia a tu correo)
 jobhunter run                            Buscar y enviar a reclutadores
 jobhunter optimize                       Optimizar queries de busqueda con IA
 jobhunter optimize "..."                 Optimizar con feedback especifico
+jobhunter history                        Historial de aplicaciones enviadas
 jobhunter status                         Ver configuracion y estadisticas
 jobhunter update                         Actualizar a la ultima version
 jobhunter help                           Ver ayuda completa
@@ -61,6 +62,18 @@ jobhunter run --auto
 jobhunter --test mi@email.com --auto
 ```
 
+### Historial de aplicaciones
+
+Consulta las aplicaciones enviadas con filtros:
+
+```
+jobhunter history                        Ultimas 10 aplicaciones
+jobhunter history --last 20              Ultimas 20
+jobhunter history --company "Tech"       Filtrar por empresa
+jobhunter history --since 2026-03-01     Desde fecha
+jobhunter history --all                  Todas
+```
+
 ### Optimizar queries de busqueda
 
 Un agente de IA analiza tu perfil, queries actuales, e historial de ejecuciones para generar mejores terminos de busqueda:
@@ -90,15 +103,16 @@ Durante `jobhunter setup` puedes elegir el modelo de IA:
 | `gemini-2.5-pro` | Mayor calidad, mas lento |
 | `gemini-3-flash-preview` | Ultima generacion, rapido |
 | `gemini-3.1-pro-preview` | Ultima generacion, alta calidad |
-| `gemini-3.1-flash-lite-preview` | Ultima generacion, ligero |
 
 ### Filtrado de duplicados
 
-No envia el mismo cargo a la misma empresa si ya se envio en los ultimos 30 dias. Diferentes cargos a la misma empresa si se permiten.
+- Dentro del mismo batch: deduplicacion por titulo + empresa normalizado
+- Contra historial: no envia el mismo cargo a la misma empresa si ya se envio en los ultimos 30 dias
+- Diferentes cargos a la misma empresa si se permiten
 
 ## Como funciona (alto nivel)
 
-1. **Setup**: Configuras tu API key de Gemini, eliges el modelo de IA, correo Gmail, subes tu CV, y defines que tipo de empleo buscas
+1. **Setup**: Configuras tu API key de Gemini, eliges el modelo de IA, correo Gmail, subes tu CV, eliges plantilla de CV, idiomas de busqueda, tus idiomas con nivel, modalidad de trabajo, y tipo de empleo
 2. **Login**: Inicias sesion en LinkedIn una vez (la sesion se guarda)
 3. **Busqueda**: El sistema busca publicaciones en LinkedIn con tus terminos, expande el texto de cada post, y extrae emails de reclutadores
 4. **Analisis**: Un agente de IA analiza cada publicacion para determinar si es una oferta real y relevante para tu perfil
@@ -117,6 +131,7 @@ El sistema es un script Python (`job.py`) que orquesta 4 componentes:
 job.py
  ├── Playwright (scraping de LinkedIn)
  ├── Gemini API (4 agentes de IA, modelo configurable)
+ ├── src/cv_templates/ (4 plantillas de CV)
  ├── ReportLab (generacion de PDFs)
  └── SMTP (envio de emails)
 ```
@@ -134,11 +149,11 @@ job.py
 
 Cuatro agentes especializados, cada uno con su propio system prompt:
 
-**Agente 1 - Filtrador**: Recibe el texto de un post y determina si es una oferta real, si es relevante para el perfil del usuario, y extrae toda la informacion estructurada (titulo, empresa, requisitos, email, salario, ubicacion).
+**Agente 1 - Filtrador**: Recibe el texto de un post y determina si es una oferta real, si es relevante para el perfil del usuario, y extrae toda la informacion estructurada (titulo, empresa, requisitos, email, salario, ubicacion). Descarta ofertas que requieren idiomas que el usuario no maneja al nivel necesario.
 
-**Agente 2 - CV Writer**: Toma el perfil del usuario y la oferta, y genera un CV completamente personalizado. Reescribe el resumen profesional, reordena skills, y reescribe cada bullet de experiencia para que conecte con lo que la oferta pide.
+**Agente 2 - CV Writer**: Toma el perfil del usuario y la oferta, y genera un CV completamente personalizado. Reescribe el resumen profesional, reordena skills, y reescribe cada bullet de experiencia para que conecte con lo que la oferta pide. No inventa habilidades, idiomas ni logros que no esten en el perfil real.
 
-**Agente 3 - Email Writer**: Genera un email de aplicacion corto (max 100 palabras), en espanol neutro, texto plano, sin frases de plantilla, con 1-2 logros concretos con numeros.
+**Agente 3 - Email Writer**: Genera un email de aplicacion corto (max 100 palabras), en espanol neutro, texto plano, sin frases de plantilla, con 1-2 logros concretos con numeros. Recibe los datos del CV generado para mantener coherencia entre email y CV adjunto.
 
 **Agente 4 - Optimizer**: Analiza el perfil del usuario, queries actuales, historial de ejecuciones (tasa de conversion), y feedback opcional del usuario para generar queries de busqueda optimizadas. Usa terminos que reclutadores realmente usan en LinkedIn.
 
@@ -146,10 +161,18 @@ Los cuatro agentes usan el modelo de Gemini seleccionado durante el setup via HT
 
 ### Generacion de PDFs
 
-`src/cv_builder.py` usa ReportLab para generar PDFs con formato profesional:
-- Layout de una pagina con secciones: resumen, habilidades, experiencia, proyectos, educacion
-- Tipografia Helvetica con jerarquia visual
-- Los textos se escapan para evitar errores XML de ReportLab
+`src/cv_builder.py` delega a plantillas en `src/cv_templates/`. Hay 4 disponibles:
+
+| Plantilla | Estilo |
+|-----------|--------|
+| `modern` | Helvetica, acentos azul oscuro (default) |
+| `minimal` | Header centrado, espacioso, elegante |
+| `classic` | Times serif, secciones en rojo oscuro |
+| `compact` | Denso, skills en 2 columnas, mas contenido por pagina |
+
+- Secciones: resumen, habilidades, experiencia, proyectos, educacion, idiomas
+- Normalizacion ATS: limpia smart quotes, em-dashes, zero-width chars y otros caracteres que los ATS parsean mal
+- Se selecciona la plantilla durante `jobhunter setup`
 
 ### Envio de emails
 
