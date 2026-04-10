@@ -1329,6 +1329,65 @@ JSON (sin markdown, sin bloques de codigo):
 # ══════════════════════════════════════════════
 # HELP
 # ══════════════════════════════════════════════
+def cmd_history(last=10, company_filter=None, since=None, show_all=False):
+    """Show application history from knowledge.json."""
+    kb = load_kb()
+    apps = kb.get("applications", [])
+    if not apps:
+        console.print("  [yellow]![/yellow] No hay aplicaciones registradas.")
+        return
+
+    # Sort by date descending
+    apps = sorted(apps, key=lambda a: a.get("date", ""), reverse=True)
+
+    # Filter by company
+    if company_filter:
+        cf = company_filter.lower()
+        apps = [a for a in apps if cf in (a.get("company") or "").lower()]
+
+    # Filter by date
+    if since:
+        try:
+            cutoff = datetime.fromisoformat(since)
+            apps = [a for a in apps if datetime.fromisoformat(a.get("date", "1970-01-01")) >= cutoff]
+        except ValueError:
+            console.print(f"  [red]![/red] Formato de fecha invalido: {since} (usa YYYY-MM-DD)")
+            return
+
+    # Limit
+    if not show_all:
+        apps = apps[:last]
+
+    if not apps:
+        console.print("  [yellow]![/yellow] No se encontraron aplicaciones con esos filtros.")
+        return
+
+    table = Table(border_style="cyan", padding=(0, 1), expand=False)
+    table.add_column("#", style="dim", width=4)
+    table.add_column("Fecha", style="dim", width=12)
+    table.add_column("Puesto", style="bold", max_width=35)
+    table.add_column("Empresa", max_width=25)
+    table.add_column("Email reclutador", style="dim", max_width=30)
+    table.add_column("Modo", width=6)
+
+    for i, app in enumerate(apps, 1):
+        date_str = app.get("date", "")[:10]
+        mode = app.get("mode", "RUN")
+        mode_style = "[yellow]TEST[/yellow]" if mode == "TEST" else "[green]RUN[/green]"
+        table.add_row(
+            str(i),
+            date_str,
+            (app.get("job_title") or "-")[:35],
+            (app.get("company") or "-")[:25],
+            (app.get("recruiter_email") or app.get("sent_to") or "-")[:30],
+            mode_style,
+        )
+
+    console.print()
+    console.print(Panel(table, border_style="cyan", title=f"[bold]Historial de aplicaciones ({len(apps)})[/bold]"))
+    console.print()
+
+
 def cmd_help():
     console.print(get_banner())
 
@@ -1342,6 +1401,7 @@ def cmd_help():
     cmds.add_row("jobhunter run", "Buscar y enviar a reclutadores")
     cmds.add_row("jobhunter optimize", "Optimizar queries con IA")
     cmds.add_row("jobhunter optimize \"...\"", "Optimizar con feedback tuyo")
+    cmds.add_row("jobhunter history", "Historial de aplicaciones")
     cmds.add_row("jobhunter status", "Ver configuracion y estadisticas")
     cmds.add_row("jobhunter update", "Actualizar desde GitHub")
     cmds.add_row("jobhunter help", "Mostrar esta ayuda")
@@ -1355,6 +1415,10 @@ def cmd_help():
     opts.add_row("--time week", "Esta semana")
     opts.add_row("--time month", "Este mes")
     opts.add_row("--auto", "Aplicar a todas sin preguntar")
+    opts.add_row("--last N", "Ultimas N aplicaciones [dim](history)[/dim]")
+    opts.add_row("--company \"...\"", "Filtrar por empresa [dim](history)[/dim]")
+    opts.add_row("--since YYYY-MM-DD", "Desde fecha [dim](history)[/dim]")
+    opts.add_row("--all", "Mostrar todas [dim](history)[/dim]")
     console.print(Panel(opts, border_style="dim", title="[bold]Opciones[/bold]"))
 
     # Selection info
@@ -1424,6 +1488,20 @@ def main():
     elif cmd in ("optimize",):
         user_prompt = sys.argv[2] if len(sys.argv) > 2 and not sys.argv[2].startswith("--") else None
         cmd_optimize(user_prompt)
+    elif cmd in ("history",):
+        last = 10
+        company_filter = None
+        since = None
+        show_all = "--all" in sys.argv
+        for i, a in enumerate(sys.argv):
+            if a == "--last" and i + 1 < len(sys.argv):
+                try: last = int(sys.argv[i + 1])
+                except ValueError: pass
+            elif a == "--company" and i + 1 < len(sys.argv):
+                company_filter = sys.argv[i + 1]
+            elif a == "--since" and i + 1 < len(sys.argv):
+                since = sys.argv[i + 1]
+        cmd_history(last=last, company_filter=company_filter, since=since, show_all=show_all)
     elif cmd in ("status",):
         cmd_status()
     elif cmd in ("update",):
