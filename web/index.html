@@ -1003,24 +1003,21 @@
                 <span class="terminal-title">jobhunter &mdash; bash</span>
             </div>
             <div class="terminal-body" id="terminal-body">
-                <div><span class="cmd">$</span> <span class="ok">jobhunter</span> <span class="flag">run</span></div>
+                <div><span class="cmd">$</span> <span class="ok">jobhunter</span> <span class="flag">run</span> <span class="flag">--time month</span></div>
                 <br>
-                <div class="dim">  Destino: Reclutadores  |  Queries: 20</div>
+                <div class="dim">  Buscando en LinkedIn...</div>
+                <div class="ok">  135 posts  |  90 con email  |  45 sin email (omitidos)</div>
                 <br>
-                <div class="line-phase"><span class="accent">Fase 1</span> &mdash; Buscando en LinkedIn</div>
-                <div class="ok">  115 posts encontrados  |  47 emails extraidos</div>
+                <div class="dim">  Analizando ofertas...</div>
+                <div class="ok">  28 ofertas  |  24 con email  |  3 duplicadas</div>
                 <br>
-                <div class="line-phase"><span class="accent">Fase 2</span> &mdash; Analisis con IA</div>
-                <div class="ok">  30 ofertas relevantes  |  27 con email de reclutador</div>
+                <div class="dim">  Generando y enviando...</div>
                 <br>
-                <div class="line-phase"><span class="accent">Fase 3</span> &mdash; Generando CVs y enviando</div>
-                <div>  <span class="ok">[1/27]</span> AI Engineer SR <span class="dim">en IT Patagonia</span></div>
-                <div>         <span class="warn">CV generado</span> &mdash; Enviado</div>
-                <div>  <span class="ok">[2/27]</span> Full Stack Developer <span class="dim">en NinjaTech</span></div>
-                <div>         <span class="warn">CV generado</span> &mdash; Enviado</div>
-                <div class="dim">  ...</div>
+                <div>  <span class="accent">1</span><span class="dim">/3</span> Senior Engineer <span class="dim">&rarr;</span> Infotree  <span class="ok">&gt; Enviado</span> <span class="dim">&rarr; recruiter@infotree.com</span></div>
+                <div>  <span class="accent">2</span><span class="dim">/3</span> Full Stack Developer <span class="dim">&rarr;</span> Empresa  <span class="ok">&gt; Enviado</span> <span class="dim">&rarr; hr@empresa.com</span></div>
+                <div>  <span class="accent">3</span><span class="dim">/3</span> Backend Engineer <span class="dim">&rarr;</span> Infobase  <span class="ok">&gt; Enviado</span> <span class="dim">&rarr; jobs@infobase.io</span></div>
                 <br>
-                <div class="ok">  27 aplicaciones enviadas exitosamente <span class="terminal-cursor"></span></div>
+                <div class="ok">  3 enviados  |  0 errores <span class="terminal-cursor"></span></div>
             </div>
         </div>
     </div>
@@ -1104,21 +1101,14 @@
                 <div class="step-num">2</div>
                 <div class="step-content">
                     <h3>Configurar</h3>
-                    <p>Sube tu CV, configura tu API key de Gemini (gratis), y define que tipo de empleo buscas.</p>
+                    <p>Wizard interactivo: sube tu CV, configura Gmail, elige plantilla, define idiomas y tipo de empleo, e inicia sesion en LinkedIn. Todo en un solo flujo.</p>
                 </div>
             </div>
             <div class="step" data-step="3">
                 <div class="step-num">3</div>
                 <div class="step-content">
-                    <h3>Login en LinkedIn</h3>
-                    <p>Inicia sesion una vez. La sesion se guarda para futuras ejecuciones.</p>
-                </div>
-            </div>
-            <div class="step" data-step="4">
-                <div class="step-num">4</div>
-                <div class="step-content">
                     <h3>Ejecutar</h3>
-                    <p>El sistema escanea, analiza, genera CVs personalizados, escribe emails, y los envia automaticamente.</p>
+                    <p>El sistema escanea LinkedIn, filtra con IA, genera CVs personalizados, escribe emails, y los envia al reclutador.</p>
                 </div>
             </div>
         </div>
