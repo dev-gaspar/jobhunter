@@ -11,7 +11,7 @@ Uso:
     jobhunter status                Ver configuracion y estadisticas
     jobhunter setup                 Configuracion inicial
 """
-import json, os, sys, re, time, smtplib, subprocess, shutil, requests, base64
+import json, os, sys, re, time, random, smtplib, subprocess, shutil, requests, base64
 import urllib.parse
 from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
@@ -661,15 +661,15 @@ def scrape_posts(page, query, max_scroll=4, time_filter="24h"):
         page.goto(f"https://www.linkedin.com/search/results/content/?keywords={encoded}&datePosted=%5B%22{date_param}%22%5D&sortBy=%5B%22date_posted%22%5D", wait_until="domcontentloaded", timeout=60000)
     except Exception:
         return []  # Si timeout, saltar esta query y continuar con la siguiente
-    page.wait_for_timeout(5000)
+    page.wait_for_timeout(random.randint(4000, 6000))
     for _ in range(max_scroll):
-        page.evaluate("window.scrollBy(0, 800)")
-        page.wait_for_timeout(2000)
+        page.evaluate(f"window.scrollBy(0, {random.randint(500, 1100)})")
+        page.wait_for_timeout(random.randint(1500, 3500))
 
     page.evaluate("""() => {
         document.querySelectorAll('button[data-testid="expandable-text-button"]').forEach(b => { try{b.click()}catch(e){} });
     }""")
-    page.wait_for_timeout(2000)
+    page.wait_for_timeout(random.randint(1500, 3000))
 
     # Extract post URLs via 3-dot menu (contains activity URN in "Report" link)
     post_urls = {}
@@ -681,7 +681,7 @@ def scrape_posts(page, query, max_scroll=4, time_filter="24h"):
                 if not menu_btn.is_visible(timeout=500):
                     continue
                 menu_btn.click()
-                page.wait_for_timeout(600)
+                page.wait_for_timeout(random.randint(400, 900))
                 activity_id = page.evaluate(r"""() => {
                     const links = document.querySelectorAll('a[href*="entityUrn"]');
                     for (const l of links) {
@@ -693,7 +693,7 @@ def scrape_posts(page, query, max_scroll=4, time_filter="24h"):
                 if activity_id:
                     post_urls[i] = f"https://www.linkedin.com/feed/update/urn:li:activity:{activity_id}"
                 page.keyboard.press("Escape")
-                page.wait_for_timeout(300)
+                page.wait_for_timeout(random.randint(200, 500))
             except Exception:
                 try: page.keyboard.press("Escape")
                 except: pass
@@ -1018,7 +1018,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, export_fmt=Non
                             all_posts.append(pi)
                     total_emails_found = sum(len(p.get("emails_found",[])) for p in all_posts)
                     prog.advance(task)
-                    time.sleep(3)
+                    time.sleep(random.uniform(2, 5))
 
             # Screenshots (optional, quick)
             text_boxes = page.query_selector_all('span[data-testid="expandable-text-box"]')
