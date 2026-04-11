@@ -231,9 +231,10 @@ def _setup_screen(current, total, title, subtitle=None):
     console.print()
 
 def _ask(label, **kwargs):
-    """Prompt wrapper that detects '<' for go-back navigation."""
+    """Prompt wrapper that detects '<' for go-back navigation and cleans input."""
     val = Prompt.ask(label, **kwargs)
-    if val.strip() == BACK:
+    val = val.strip().strip('"').strip("'")
+    if val == BACK:
         return None
     return val
 
@@ -254,6 +255,7 @@ def cmd_setup():
             key = _ask("  Clave API", default=cfg.get("gemini_api_key", ""))
             if key is None: return "back"
             if not key: console.print("  [red]Obligatoria.[/red]"); continue
+            key = key.replace(" ", "")
             with console.status("  [dim]Verificando...[/dim]"):
                 try:
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
@@ -289,7 +291,8 @@ def cmd_setup():
             if not re.match(r'^[^@]+@gmail\.com$', email):
                 console.print("  [red]![/red] Debe ser @gmail.com"); continue
             pwd = Prompt.ask("  Contrasena de app", default=cfg.get("smtp_password",""), password=True)
-            if pwd.strip() == BACK: return "back"
+            pwd = pwd.strip().replace(" ", "")
+            if pwd == BACK: return "back"
             if not pwd or len(pwd) < 10:
                 console.print("  [red]![/red] Minimo 16 caracteres"); continue
             with console.status("  [dim]Verificando SMTP...[/dim]"):
