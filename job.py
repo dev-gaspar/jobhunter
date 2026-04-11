@@ -291,7 +291,7 @@ def cmd_setup():
         console.print()
         console.print("  [bold]Tus idiomas y nivel[/bold] [dim](Ej: Espanol:Nativo, Ingles:B1)[/dim]")
         existing = cfg.get("user_languages", [])
-        default = ", ".join(f"{l['language']}:{l['level']}" for l in existing) if existing else ""
+        default = ", ".join(lang["language"] + ":" + lang["level"] for lang in existing) if existing else ""
         val = _ask("  Idiomas", default=default)
         if val is None: return "back"
         langs = []
@@ -745,6 +745,7 @@ def agent_filter(cfg, text, ss=None):
     work_mode_label = cfg.get("work_mode_label", "Cualquiera")
     user_location = cfg.get("user_location", "")
     user_languages = cfg.get("user_languages", [])
+    user_langs_str = ", ".join(lang["language"] + " (" + lang["level"] + ")" for lang in user_languages) if user_languages else "No especificados"
 
     work_mode_rule = ""
     if work_mode_label.lower() == "remoto":
@@ -761,7 +762,7 @@ PERFIL DEL CANDIDATO:
 - Busca empleo como: {job_types}
 - Modalidad preferida: {work_mode_label}
 {f'- Ubicacion del candidato: {user_location}' if user_location else ''}
-- Idiomas del candidato: {', '.join(f"{l['language']} ({l['level']})" for l in user_languages) if user_languages else 'No especificados'}
+- Idiomas del candidato: {user_langs_str}
 - Resumen: {profile_summary[:300]}
 - Habilidades: {json.dumps(profile_skills) if isinstance(profile_skills, dict) else str(profile_skills)[:500]}
 
@@ -774,7 +775,7 @@ REGLAS DE FILTRADO:
 - Solo ofertas de TRABAJO reales (no cursos, certificaciones, logros personales, contenido general, publicidad)
 - Relevante si el puesto tiene relacion con lo que busca el candidato: {job_types}
 {work_mode_rule}
-- Si la oferta REQUIERE un idioma con nivel avanzado o fluido que el candidato NO tiene a ese nivel, marcar is_relevant=false. Los idiomas del candidato son: {', '.join(f"{l['language']} ({l['level']})" for l in user_languages) if user_languages else 'No especificados'}
+- Si la oferta REQUIERE un idioma con nivel avanzado o fluido que el candidato NO tiene a ese nivel, marcar is_relevant=false. Los idiomas del candidato son: {user_langs_str}
 - Extraer SIEMPRE el email si existe en el texto
 - Extraer empresa, titulo, descripcion COMPLETA con todos los detalles
 - Extraer requisitos especificos (habilidades, herramientas, anos de experiencia, idiomas, etc.)
@@ -811,6 +812,8 @@ def agent_cv(cfg, job):
 
     lang_names = {"es": "ESPAÑOL", "en": "INGLES", "pt": "PORTUGUES", "fr": "FRANCES", "de": "ALEMAN"}
     lang_name = lang_names.get(lang, "ESPAÑOL")
+    cv_user_langs = cfg.get("user_languages", [])
+    cv_user_langs_str = ", ".join(ul["language"] + " (" + ul["level"] + ")" for ul in cv_user_langs) if cv_user_langs else "No especificados"
 
     prompt = f"""ROLE: Eres un reclutador senior que ha revisado mas de 100,000 hojas de vida. Sabes exactamente que busca un hiring manager cuando lee un CV: relevancia inmediata, logros con numeros, y lenguaje que coincida con la oferta.
 Tu trabajo es tomar el perfil del candidato y REESCRIBIRLO desde la perspectiva de lo que el hiring manager de ESTA oferta quiere leer. No es solo hacer match de keywords — es presentar la experiencia del candidato en el orden y con el enfoque que haria que un reclutador diga "este es el candidato".
@@ -823,7 +826,7 @@ REGLAS CRITICAS:
 - NO traduzcas terminos que en la industria se usan en su idioma original
 - Adapta TODO el CV al sector y lenguaje de la oferta
 - PROHIBIDO INVENTAR. No agregues habilidades, tecnologias, idiomas, certificaciones, logros o experiencias que NO esten en el perfil del candidato. Solo puedes REORDENAR, REFORMULAR y DESTACAR lo que YA existe. Si la oferta pide algo que el candidato no tiene, simplemente no lo menciones.
-- IDIOMAS: Solo incluye los idiomas que el candidato realmente maneja. Los idiomas del candidato son: {', '.join(f"{l['language']} ({l['level']})" for l in cfg.get('user_languages', [])) if cfg.get('user_languages') else 'No especificados'}. NO inventes niveles de idioma ni agregues idiomas que no esten en esta lista.
+- IDIOMAS: Solo incluye los idiomas que el candidato realmente maneja. Los idiomas del candidato son: {cv_user_langs_str}. NO inventes niveles de idioma ni agregues idiomas que no esten en esta lista.
 
 CANDIDATO:
 {json.dumps(p, indent=2)}
@@ -888,8 +891,17 @@ SOLO JSON valido."""
 def agent_email(cfg, job, cv_data=None):
     """Agent specialized in writing personalized application emails."""
     p = cfg["profile"]
-    portfolio_line = f"\n- Portfolio: {p['portfolio']}" if p.get('portfolio') else ""
-    linkedin_line = f"\n- LinkedIn: {p['linkedin']}" if p.get('linkedin') else ""
+    portfolio_line = "\n- Portfolio: " + p["portfolio"] if p.get("portfolio") else ""
+    linkedin_line = "\n- LinkedIn: " + p["linkedin"] if p.get("linkedin") else ""
+    cv_context = ""
+    if cv_data:
+        cv_skills = ", ".join(cv_data.get("skills_highlighted", [])[:8])
+        cv_context = (
+            "\nCV GENERADO PARA ESTA OFERTA (usa estos datos para que el email sea coherente con el CV adjunto):"
+            "\n- Titulo: " + cv_data.get("title", "") +
+            "\n- Resumen: " + cv_data.get("summary", "") +
+            "\n- Skills destacadas: " + cv_skills + "\n"
+        )
     lang = job.get("language", "es")
 
     lang_names = {"es": "ESPAÑOL", "en": "INGLES", "pt": "PORTUGUES", "fr": "FRANCES", "de": "ALEMAN"}
@@ -916,12 +928,7 @@ IDIOMA: Escribe TODO el email en {lang_name}. La oferta esta en {lang_name}.
 CANDIDATO:
 - Nombre: {p.get('name', '')}{portfolio_line}{linkedin_line}
 - Busca empleo como: {cfg.get('job_types_raw', '')}
-{f"""
-CV GENERADO PARA ESTA OFERTA (usa estos datos para que el email sea coherente con el CV adjunto):
-- Titulo: {cv_data.get('title', '')}
-- Resumen: {cv_data.get('summary', '')}
-- Skills destacadas: {', '.join(cv_data.get('skills_highlighted', [])[:8])}
-""" if cv_data else ''}
+{cv_context}
 OFERTA:
 - Puesto: {job.get('job_title', '')}
 - Empresa: {job.get('company', '')}

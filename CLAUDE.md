@@ -9,7 +9,7 @@ JobHunter AI — Spanish-language Python CLI that automates job searching on Lin
 ## Commands
 
 ```bash
-jobhunter setup                      # Interactive 10-step setup wizard
+jobhunter setup                      # Interactive 7-step setup wizard
 jobhunter login                      # One-time LinkedIn auth (persistent Chrome session)
 jobhunter run                        # Full pipeline: scrape → filter → generate → send
 jobhunter run --auto                 # Skip interactive selection, apply to all
@@ -64,6 +64,29 @@ All agents call Gemini via direct HTTP POST (`call_gemini()` / `call_gemini_visi
 
 Auto-installed by job.py at startup: `rich`, `requests`, `playwright`, `reportlab`.
 External: Python 3.10+, Chrome/Edge browser, Git, Gemini API key, Gmail App Password.
+
+## Python Compatibility
+
+**Minimum version: Python 3.10.** Must work on 3.10, 3.11, 3.12, and 3.13.
+
+**CRITICAL: Do NOT use f-strings with nested quotes.** Python 3.10 and 3.11 do not support quotes inside f-string expressions that match the outer quote type. This WILL crash on Ubuntu 22.04 and other systems with Python 3.10.
+
+```python
+# WRONG — breaks on Python 3.10:
+f"...{l['key']}..."           # single quotes inside single-quoted f-string: OK
+f"...{d['a']['b']}..."        # nested dict access: OK
+f"""...{l['key']}..."""        # single quotes inside triple-quoted f-string: BREAKS
+f"...{f'nested {x}'}..."      # nested f-string: BREAKS
+{f"""...""" if cond else ''}   # f-string with triple quotes inside another f-string: BREAKS
+
+# CORRECT — works on all versions:
+val = d["key"]                 # pre-compute
+f"...{val}..."                 # use variable
+"prefix: " + d["key"]         # concatenation
+", ".join(x["k"] for x in l)  # generator with concatenation
+```
+
+Always test changes with `docker run --rm -v ./job.py:/t.py:ro python:3.10-slim python3 -c "import py_compile; py_compile.compile('/t.py', doraise=True)"` before pushing.
 
 ## Language & Localization
 
