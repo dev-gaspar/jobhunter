@@ -247,7 +247,7 @@ def cmd_setup():
     lang_options = {"1": "Espanol", "2": "Ingles", "3": "Espanol e Ingles"}
     mode_options = {"1": "Remoto", "2": "Hibrido", "3": "Presencial", "4": "Cualquiera"}
 
-    TOTAL = 7
+    TOTAL = 10
     # ── Step functions: return "back" to go back, anything else continues ──
 
     def step_links():
@@ -278,18 +278,18 @@ def cmd_setup():
         if not val: val = "software developer"
         cfg["job_types_raw"] = val
 
-    def step_preferences():
-        _setup_screen(2, TOTAL, "Preferencias", "Idiomas, modalidad y plantilla de CV")
-        # Search languages
-        console.print("  [bold]Idiomas de busqueda[/bold]")
+    def step_search_langs():
+        _setup_screen(2, TOTAL, "Idiomas de busqueda", "En que idiomas buscar ofertas en LinkedIn")
         for k, v in lang_options.items():
             console.print(f"  [cyan]{k}.[/cyan] {v}")
         choice = _ask("  Selecciona", default=cfg.get("search_languages", "3"))
         if choice is None: return "back"
         cfg["search_languages"] = choice if choice in lang_options else "3"
-        # User languages
-        console.print()
-        console.print("  [bold]Tus idiomas y nivel[/bold] [dim](Ej: Espanol:Nativo, Ingles:B1)[/dim]")
+
+    def step_user_langs():
+        _setup_screen(3, TOTAL, "Tus idiomas y nivel", "Se usa para filtrar ofertas y para el CV")
+        console.print("  [dim]Ej: Espanol:Nativo, Ingles:B1[/dim]")
+        console.print("  [dim]Niveles: Nativo, Avanzado (C1-C2), Intermedio (B1-B2), Basico (A1-A2)[/dim]")
         existing = cfg.get("user_languages", [])
         default = ", ".join(lang["language"] + ":" + lang["level"] for lang in existing) if existing else ""
         val = _ask("  Idiomas", default=default)
@@ -303,9 +303,9 @@ def cmd_setup():
             elif part:
                 langs.append({"language": part, "level": "Nativo"})
         cfg["user_languages"] = langs
-        # Work mode
-        console.print()
-        console.print("  [bold]Modalidad de trabajo[/bold]")
+
+    def step_work_mode():
+        _setup_screen(4, TOTAL, "Modalidad de trabajo")
         for k, v in mode_options.items():
             console.print(f"  [cyan]{k}.[/cyan] {v}")
         choice = _ask("  Selecciona", default=cfg.get("work_mode", "4"))
@@ -320,9 +320,9 @@ def cmd_setup():
             cfg["user_location"] = loc
         else:
             cfg["user_location"] = cfg.get("user_location", "")
-        # CV template
-        console.print()
-        console.print("  [bold]Plantilla de CV[/bold]")
+
+    def step_cv_template():
+        _setup_screen(5, TOTAL, "Plantilla de CV", "Estilo visual del PDF generado")
         current_tmpl = cfg.get("cv_template", DEFAULT_TEMPLATE)
         tmpl_keys = list(TEMPLATES.keys())
         for i, key in enumerate(tmpl_keys, 1):
@@ -337,7 +337,7 @@ def cmd_setup():
         except ValueError: pass
 
     def step_gemini():
-        _setup_screen(3, TOTAL, "Gemini AI", "Obtiene la clave gratis en https://aistudio.google.com/apikey")
+        _setup_screen(6, TOTAL, "Gemini AI", "Obtiene la clave gratis en https://aistudio.google.com/apikey")
         while True:
             key = _ask("  Clave API", default=cfg.get("gemini_api_key", ""))
             if key is None: return "back"
@@ -367,7 +367,7 @@ def cmd_setup():
         except ValueError: pass
 
     def step_gmail():
-        _setup_screen(5, TOTAL, "Gmail + Contrasena de aplicacion", "Cuenta Google > Seguridad > Contrasenas de aplicacion")
+        _setup_screen(7, TOTAL, "Gmail + Contrasena de aplicacion", "Cuenta Google > Seguridad > Contrasenas de aplicacion")
         while True:
             email = _ask("  Gmail", default=cfg.get("smtp_email", ""))
             if email is None: return "back"
@@ -389,7 +389,7 @@ def cmd_setup():
                     console.print(f"  [red]![/red] {e}")
 
     def step_cv():
-        _setup_screen(4, TOTAL, "Tu CV actual", "Ruta al archivo PDF")
+        _setup_screen(8, TOTAL, "Tu CV actual", "Ruta al archivo PDF")
         while True:
             cv = _ask("  Ruta del CV (.pdf)", default=cfg.get("cv_path", ""))
             if cv is None: return "back"
@@ -419,7 +419,7 @@ SOLO JSON valido.""", b64, "application/pdf")
                     return
 
     def step_linkedin_login():
-        _setup_screen(6, TOTAL, "Login en LinkedIn", "Se abrira Chrome para iniciar sesion")
+        _setup_screen(9, TOTAL, "Login en LinkedIn", "Se abrira Chrome para iniciar sesion")
         if os.path.exists(SESSION_DIR):
             console.print("  [green]>[/green] Sesion existente detectada")
             skip = _ask("  Saltar login? (s/n)", default="s")
@@ -429,8 +429,9 @@ SOLO JSON valido.""", b64, "application/pdf")
         _do_linkedin_login()
 
     # ── State machine (ordered easy → hard) ──
-    steps = [step_links, step_job_types, step_preferences,
-             step_gemini, step_cv, step_gmail, step_linkedin_login]
+    steps = [step_links, step_job_types, step_search_langs, step_user_langs,
+             step_work_mode, step_cv_template, step_gemini, step_gmail,
+             step_cv, step_linkedin_login]
     idx = 0
     while idx < len(steps):
         result = steps[idx]()
