@@ -211,104 +211,111 @@ def kill_playwright_zombies():
 # ══════════════════════════════════════════════
 # SETUP WIZARD
 # ══════════════════════════════════════════════
-def _step_header(num, total, title, subtitle=None):
-    """Print a styled step header."""
+BACK = "<"
+
+def _setup_screen(current, total, title, subtitle=None):
+    """Clear screen and show setup step with percentage bar."""
+    if console.is_terminal:
+        console.clear()
+    console.print(get_banner())
+    pct = int((current / total) * 100)
+    filled = int(pct / 5)
+    bar = "[cyan]" + "█" * filled + "[/cyan]" + "[dim]" + "░" * (20 - filled) + "[/dim]"
+    console.print(f"  {bar}  [bold]{pct}%[/bold]")
     console.print()
-    progress_bar = "[cyan]" + "━" * num + "[/cyan]" + "[dim]" + "╌" * (total - num) + "[/dim]"
-    console.print(f"  {progress_bar}  [dim]{num}/{total}[/dim]")
     console.print(f"  [bold]{title}[/bold]")
     if subtitle:
         console.print(f"  [dim]{subtitle}[/dim]")
+    if current > 0:
+        console.print(f"  [dim]Escribe '<' para volver[/dim]")
+    console.print()
 
-def _phase_header(title):
-    """Print a styled phase header for run command."""
-    console.print()
-    console.print(Rule(f"[bold]{title}[/bold]", style="cyan"))
-    console.print()
+def _ask(label, **kwargs):
+    """Prompt wrapper that detects '<' for go-back navigation."""
+    val = Prompt.ask(label, **kwargs)
+    if val.strip() == BACK:
+        return None
+    return val
 
 
 def cmd_setup():
-    console.print(get_banner())
-    total_steps = 10
-
     cfg = load_config()
-
-    # 1. Gemini
-    _step_header(1, total_steps, "Clave API de Gemini", "Obtienla gratis en https://aistudio.google.com/apikey")
-    while True:
-        key = Prompt.ask("  Clave API", default=cfg.get("gemini_api_key", ""))
-        if not key:
-            console.print("  [red]La clave API es obligatoria.[/red]")
-            continue
-        with console.status("  [dim]Verificando...[/dim]"):
-            try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
-                requests.post(url, json={"contents":[{"parts":[{"text":"test"}]}]}, timeout=10).raise_for_status()
-                console.print("  [green]✓[/green] Clave valida")
-                cfg["gemini_api_key"] = key
-                break
-            except:
-                console.print("  [red]✗[/red] Clave API invalida. Intentalo de nuevo.")
-
-    # 1b. Modelo de Gemini
-    console.print()
-    console.print(f"  [bold]Modelo de Gemini[/bold]")
-    current_model = cfg.get("gemini_model", "gemini-2.5-flash")
-    for i, m in enumerate(GEMINI_MODELS, 1):
-        marker = " [green]◄ actual[/green]" if m == current_model else ""
-        console.print(f"  [cyan]{i}.[/cyan] {m}{marker}")
-    while True:
-        choice = Prompt.ask("  Selecciona modelo", default=str(GEMINI_MODELS.index(current_model) + 1 if current_model in GEMINI_MODELS else 1))
-        try:
-            idx = int(choice) - 1
-            if 0 <= idx < len(GEMINI_MODELS):
-                cfg["gemini_model"] = GEMINI_MODELS[idx]
-                console.print(f"  [green]✓[/green] {GEMINI_MODELS[idx]}")
-                break
-        except ValueError:
-            pass
-        console.print(f"  [red]✗[/red] Selecciona un numero del 1 al {len(GEMINI_MODELS)}")
-
-    # 2. Gmail
-    _step_header(2, total_steps, "Correo Gmail + Contrasena de aplicacion", "Cuenta Google > Seguridad > Contrasenas de aplicacion")
-    while True:
-        email = Prompt.ask("  Gmail", default=cfg.get("smtp_email", ""))
-        if not re.match(r'^[^@]+@gmail\.com$', email):
-            console.print("  [red]✗[/red] Debe ser una cuenta @gmail.com")
-            continue
-        pwd = Prompt.ask("  Contrasena de app", default=cfg.get("smtp_password",""), password=True)
-        if not pwd or len(pwd) < 10:
-            console.print("  [red]✗[/red] La contrasena de aplicacion debe tener al menos 16 caracteres")
-            continue
-        with console.status("  [dim]Verificando SMTP...[/dim]"):
-            try:
-                with smtplib.SMTP("smtp.gmail.com", 587) as s:
-                    s.starttls(); s.login(email, pwd)
-                console.print("  [green]✓[/green] Conexion SMTP verificada")
-                cfg["smtp_email"] = email
-                cfg["smtp_password"] = pwd
-                break
-            except Exception as e:
-                console.print(f"  [red]✗[/red] Error: {e}")
-                console.print("  [yellow]  Verifica el App Password e intenta de nuevo.[/yellow]")
-
-    # 3. CV
-    _step_header(3, total_steps, "Tu CV actual", "Ruta al archivo PDF de tu CV")
     profile = cfg.get("profile", {})
-    while True:
-        cv = Prompt.ask("  Ruta del CV (.pdf)", default=cfg.get("cv_path", ""))
-        if not cv:
-            console.print("  [yellow]![/yellow] Sin CV. Puedes agregarlo despues con 'jobhunter setup'")
-            break
-        if not os.path.exists(cv):
-            console.print(f"  [red]✗[/red] Archivo no encontrado: {cv}")
-            continue
-        cfg["cv_path"] = cv
-        with console.status("  [dim]Leyendo CV con Gemini AI...[/dim]"):
+    from src.cv_templates import TEMPLATES, DEFAULT_TEMPLATE
+
+    lang_options = {"1": "Espanol", "2": "Ingles", "3": "Espanol e Ingles"}
+    mode_options = {"1": "Remoto", "2": "Hibrido", "3": "Presencial", "4": "Cualquiera"}
+
+    # ── Step functions: return "back" to go back, anything else continues ──
+
+    def step_gemini_key():
+        _setup_screen(0, 11, "Clave API de Gemini", "Obtienla gratis en https://aistudio.google.com/apikey")
+        while True:
+            key = _ask("  Clave API", default=cfg.get("gemini_api_key", ""))
+            if key is None: return "back"
+            if not key: console.print("  [red]Obligatoria.[/red]"); continue
+            with console.status("  [dim]Verificando...[/dim]"):
+                try:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
+                    requests.post(url, json={"contents":[{"parts":[{"text":"test"}]}]}, timeout=10).raise_for_status()
+                    cfg["gemini_api_key"] = key
+                    console.print("  [green]>[/green] Clave valida")
+                    return
+                except:
+                    console.print("  [red]![/red] Clave invalida. Intenta de nuevo.")
+
+    def step_gemini_model():
+        _setup_screen(1, 11, "Modelo de Gemini")
+        current = cfg.get("gemini_model", "gemini-2.5-flash")
+        for i, m in enumerate(GEMINI_MODELS, 1):
+            marker = " [green]<< actual[/green]" if m == current else ""
+            console.print(f"  [cyan]{i}.[/cyan] {m}{marker}")
+        while True:
+            choice = _ask("  Selecciona", default=str(GEMINI_MODELS.index(current) + 1 if current in GEMINI_MODELS else 1))
+            if choice is None: return "back"
             try:
-                with open(cv, "rb") as f:
-                    b64 = base64.b64encode(f.read()).decode()
-                result = call_gemini_vision(cfg, """Lee este CV/resume y extrae TODA la informacion en JSON.
+                idx = int(choice) - 1
+                if 0 <= idx < len(GEMINI_MODELS):
+                    cfg["gemini_model"] = GEMINI_MODELS[idx]
+                    return
+            except ValueError: pass
+            console.print(f"  [red]![/red] Numero del 1 al {len(GEMINI_MODELS)}")
+
+    def step_gmail():
+        _setup_screen(2, 11, "Gmail + Contrasena de aplicacion", "Cuenta Google > Seguridad > Contrasenas de aplicacion")
+        while True:
+            email = _ask("  Gmail", default=cfg.get("smtp_email", ""))
+            if email is None: return "back"
+            if not re.match(r'^[^@]+@gmail\.com$', email):
+                console.print("  [red]![/red] Debe ser @gmail.com"); continue
+            pwd = Prompt.ask("  Contrasena de app", default=cfg.get("smtp_password",""), password=True)
+            if pwd.strip() == BACK: return "back"
+            if not pwd or len(pwd) < 10:
+                console.print("  [red]![/red] Minimo 16 caracteres"); continue
+            with console.status("  [dim]Verificando SMTP...[/dim]"):
+                try:
+                    with smtplib.SMTP("smtp.gmail.com", 587) as s:
+                        s.starttls(); s.login(email, pwd)
+                    cfg["smtp_email"] = email; cfg["smtp_password"] = pwd
+                    console.print("  [green]>[/green] SMTP verificado")
+                    return
+                except Exception as e:
+                    console.print(f"  [red]![/red] {e}")
+
+    def step_cv():
+        _setup_screen(3, 11, "Tu CV actual", "Ruta al archivo PDF")
+        while True:
+            cv = _ask("  Ruta del CV (.pdf)", default=cfg.get("cv_path", ""))
+            if cv is None: return "back"
+            if not cv: return  # skip
+            if not os.path.exists(cv):
+                console.print(f"  [red]![/red] No encontrado: {cv}"); continue
+            cfg["cv_path"] = cv
+            with console.status("  [dim]Leyendo CV con Gemini AI...[/dim]"):
+                try:
+                    with open(cv, "rb") as f:
+                        b64 = base64.b64encode(f.read()).decode()
+                    result = call_gemini_vision(cfg, """Lee este CV/resume y extrae TODA la informacion en JSON.
 Adapta las categorias de skills al perfil real de la persona (no asumas que es tech).
 {"name":"","title":"titulo profesional","email":"","phone":"","linkedin":"","portfolio":"","location":"",
 "summary":"resumen profesional completo",
@@ -317,197 +324,172 @@ Adapta las categorias de skills al perfil real de la persona (no asumas que es t
 "education":[{"institution":"","degree":"","period":""}],
 "projects":[{"name":"","description":"","tech":[]}],"achievements":[]}
 SOLO JSON valido.""", b64, "application/pdf")
-                profile = json.loads(result)
-                console.print(f"  [green]✓[/green] CV leido — {profile.get('name', '?')}")
-                skills_preview = ', '.join(list(profile.get('skills',{}).values())[0][:5]) if profile.get('skills') else '-'
-                console.print(f"    [dim]{skills_preview}...[/dim]")
-                break
-            except Exception as e:
-                console.print(f"  [red]✗[/red] Error leyendo CV: {e}")
-                console.print("  [yellow]  Puedes continuar sin CV automatico.[/yellow]")
-                break
+                    nonlocal profile
+                    profile = json.loads(result)
+                    console.print(f"  [green]>[/green] CV leido — {profile.get('name', '?')}")
+                    return
+                except Exception as e:
+                    console.print(f"  [red]![/red] Error: {e}")
+                    return
 
-    # 4. Portfolio
-    _step_header(4, total_steps, "Portfolio / Web personal", "Opcional")
-    portfolio = Prompt.ask("  URL", default=profile.get("portfolio", ""))
-    profile["portfolio"] = portfolio
+    def step_portfolio():
+        _setup_screen(4, 11, "Portfolio / Web personal", "Opcional, Enter para saltar")
+        val = _ask("  URL", default=profile.get("portfolio", ""))
+        if val is None: return "back"
+        profile["portfolio"] = val
 
-    # 5. LinkedIn
-    _step_header(5, total_steps, "Perfil de LinkedIn")
-    linkedin = Prompt.ask("  URL", default=profile.get("linkedin", ""))
-    if linkedin and "linkedin.com" not in linkedin:
-        console.print("  [yellow]![/yellow] Eso no parece un URL de LinkedIn")
-    profile["linkedin"] = linkedin
+    def step_linkedin():
+        _setup_screen(5, 11, "Perfil de LinkedIn")
+        val = _ask("  URL", default=profile.get("linkedin", ""))
+        if val is None: return "back"
+        profile["linkedin"] = val
 
-    cfg["profile"] = profile
-
-    # 6. Plantilla de CV
-    _step_header(6, total_steps, "Plantilla de CV", "Estilo visual del PDF generado")
-    from src.cv_templates import TEMPLATES, DEFAULT_TEMPLATE
-    current_tmpl = cfg.get("cv_template", DEFAULT_TEMPLATE)
-    tmpl_keys = list(TEMPLATES.keys())
-    for i, key in enumerate(tmpl_keys, 1):
-        t = TEMPLATES[key]
-        marker = " [green]<< actual[/green]" if key == current_tmpl else ""
-        console.print(f"  [cyan]{i}.[/cyan] {t['name']} — [dim]{t['description']}[/dim]{marker}")
-    while True:
-        tmpl_choice = Prompt.ask("  Selecciona", default=str(tmpl_keys.index(current_tmpl) + 1))
-        try:
-            idx = int(tmpl_choice) - 1
-            if 0 <= idx < len(tmpl_keys):
-                cfg["cv_template"] = tmpl_keys[idx]
-                console.print(f"  [green]✓[/green] {TEMPLATES[tmpl_keys[idx]]['name']}")
-                break
-        except ValueError:
-            pass
-        console.print(f"  [red]![/red] Selecciona un numero del 1 al {len(tmpl_keys)}")
-
-    # 7. Idiomas de busqueda
-    _step_header(7, total_steps, "En que idiomas buscar ofertas?", "Las ofertas y CVs se generaran en el idioma de cada oferta")
-    lang_options = {"1": "Espanol", "2": "Ingles", "3": "Espanol e Ingles"}
-    for k, v in lang_options.items():
-        console.print(f"  [cyan]{k}.[/cyan] {v}")
-    lang_default = cfg.get("search_languages", "3")
-    lang_choice = Prompt.ask("  Selecciona", default=lang_default)
-    if lang_choice not in lang_options:
-        lang_choice = "3"
-    cfg["search_languages"] = lang_choice
-    console.print(f"  [green]✓[/green] {lang_options[lang_choice]}")
-
-    # 8. Idiomas que domina el usuario
-    _step_header(8, total_steps, "Que idiomas manejas y a que nivel?", "Se usara para filtrar ofertas y para el CV. Ej: Espanol:Nativo, Ingles:B1")
-    console.print("  [dim]Niveles: Nativo, Avanzado (C1-C2), Intermedio (B1-B2), Basico (A1-A2)[/dim]")
-    existing_langs = cfg.get("user_languages", [])
-    if existing_langs:
-        console.print(f"  [dim]Actual: {', '.join(f'{l['language']}:{l['level']}' for l in existing_langs)}[/dim]")
-    default_langs = ", ".join(f"{l['language']}:{l['level']}" for l in existing_langs) if existing_langs else ""
-    langs_input = Prompt.ask("  Idiomas", default=default_langs)
-    user_languages = []
-    for part in langs_input.split(","):
-        part = part.strip()
-        if ":" in part:
-            lang_name, level = part.split(":", 1)
-            user_languages.append({"language": lang_name.strip(), "level": level.strip()})
-        elif part:
-            user_languages.append({"language": part.strip(), "level": "Nativo"})
-    cfg["user_languages"] = user_languages
-    if user_languages:
-        for ul in user_languages:
-            console.print(f"  [green]✓[/green] {ul['language']} — {ul['level']}")
-    else:
-        console.print("  [yellow]![/yellow] Sin idiomas configurados")
-
-    # 9. Modalidad de trabajo
-    _step_header(9, total_steps, "Que modalidad de trabajo buscas?")
-    mode_options = {"1": "Remoto", "2": "Hibrido", "3": "Presencial", "4": "Cualquiera"}
-    for k, v in mode_options.items():
-        console.print(f"  [cyan]{k}.[/cyan] {v}")
-    mode_default = cfg.get("work_mode", "4")
-    mode_choice = Prompt.ask("  Selecciona", default=mode_default)
-    if mode_choice not in mode_options:
-        mode_choice = "4"
-    cfg["work_mode"] = mode_choice
-    cfg["work_mode_label"] = mode_options[mode_choice]
-    console.print(f"  [green]✓[/green] {mode_options[mode_choice]}")
-
-    # 9b. Ubicacion (si hibrido o presencial)
-    if mode_choice in ("2", "3"):
-        console.print()
-        console.print(f"  [bold]Tu ubicacion[/bold]")
-        console.print("  [dim]Ciudad y pais para filtrar ofertas cercanas[/dim]")
-        location = Prompt.ask("  Ubicacion", default=cfg.get("user_location", profile.get("location", "")))
-        cfg["user_location"] = location
-    else:
-        cfg["user_location"] = cfg.get("user_location", "")
-
-    # 10. Preferencias de empleo
-    _step_header(10, total_steps, "Que tipo de empleo buscas?")
-
-    if profile.get("skills"):
-        with console.status("  [dim]Generando sugerencias de tu CV...[/dim]"):
+    def step_cv_template():
+        _setup_screen(6, 11, "Plantilla de CV", "Estilo visual del PDF generado")
+        current_tmpl = cfg.get("cv_template", DEFAULT_TEMPLATE)
+        tmpl_keys = list(TEMPLATES.keys())
+        for i, key in enumerate(tmpl_keys, 1):
+            t = TEMPLATES[key]
+            marker = " [green]<< actual[/green]" if key == current_tmpl else ""
+            console.print(f"  [cyan]{i}.[/cyan] {t['name']} — [dim]{t['description']}[/dim]{marker}")
+        while True:
+            choice = _ask("  Selecciona", default=str(tmpl_keys.index(current_tmpl) + 1))
+            if choice is None: return "back"
             try:
-                s = json.dumps(profile.get("skills",{}))
-                e = json.dumps(profile.get("experience",[])[:3])
-                result = call_gemini(cfg, f"Basado en skills: {s} y experiencia: {e}, sugiere 6 tipos de empleo. JSON array: [\"tipo1\",\"tipo2\"]")
-                suggestions = json.loads(result)
-                console.print("  [dim]Sugerencias basadas en tu CV:[/dim]")
-                for i, sg in enumerate(suggestions, 1):
-                    console.print(f"  [cyan]{i}.[/cyan] {sg}")
-                console.print()
-            except:
-                pass
+                idx = int(choice) - 1
+                if 0 <= idx < len(tmpl_keys):
+                    cfg["cv_template"] = tmpl_keys[idx]; return
+            except ValueError: pass
+            console.print(f"  [red]![/red] Numero del 1 al {len(tmpl_keys)}")
 
-    console.print("  [dim]Escribe los tipos de empleo separados por coma[/dim]")
-    job_types = Prompt.ask("  Tipos de empleo", default=cfg.get("job_types_raw", ""))
-    if not job_types:
-        console.print("  [red]✗[/red] Debes especificar al menos un tipo de empleo.")
-        job_types = Prompt.ask("  Tipos de empleo", default="backend developer")
-    cfg["job_types_raw"] = job_types
+    def step_search_langs():
+        _setup_screen(7, 11, "En que idiomas buscar ofertas?", "Las ofertas y CVs se generaran en el idioma de cada oferta")
+        for k, v in lang_options.items():
+            console.print(f"  [cyan]{k}.[/cyan] {v}")
+        choice = _ask("  Selecciona", default=cfg.get("search_languages", "3"))
+        if choice is None: return "back"
+        cfg["search_languages"] = choice if choice in lang_options else "3"
 
-    # Generar queries segun idioma y modalidad
+    def step_user_langs():
+        _setup_screen(8, 11, "Que idiomas manejas y a que nivel?", "Ej: Espanol:Nativo, Ingles:B1")
+        console.print("  [dim]Niveles: Nativo, Avanzado (C1-C2), Intermedio (B1-B2), Basico (A1-A2)[/dim]")
+        existing = cfg.get("user_languages", [])
+        default = ", ".join(f"{l['language']}:{l['level']}" for l in existing) if existing else ""
+        val = _ask("  Idiomas", default=default)
+        if val is None: return "back"
+        langs = []
+        for part in val.split(","):
+            part = part.strip()
+            if ":" in part:
+                n, lv = part.split(":", 1)
+                langs.append({"language": n.strip(), "level": lv.strip()})
+            elif part:
+                langs.append({"language": part, "level": "Nativo"})
+        cfg["user_languages"] = langs
+
+    def step_work_mode():
+        _setup_screen(9, 11, "Que modalidad de trabajo buscas?")
+        for k, v in mode_options.items():
+            console.print(f"  [cyan]{k}.[/cyan] {v}")
+        choice = _ask("  Selecciona", default=cfg.get("work_mode", "4"))
+        if choice is None: return "back"
+        if choice not in mode_options: choice = "4"
+        cfg["work_mode"] = choice
+        cfg["work_mode_label"] = mode_options[choice]
+        if choice in ("2", "3"):
+            console.print()
+            loc = _ask("  Tu ubicacion (ciudad, pais)", default=cfg.get("user_location", profile.get("location", "")))
+            if loc is None: return "back"
+            cfg["user_location"] = loc
+        else:
+            cfg["user_location"] = cfg.get("user_location", "")
+
+    def step_job_types():
+        _setup_screen(10, 11, "Que tipo de empleo buscas?")
+        if profile.get("skills"):
+            with console.status("  [dim]Generando sugerencias...[/dim]"):
+                try:
+                    s = json.dumps(profile.get("skills",{}))
+                    e = json.dumps(profile.get("experience",[])[:3])
+                    result = call_gemini(cfg, f"Basado en skills: {s} y experiencia: {e}, sugiere 6 tipos de empleo. JSON array: [\"tipo1\",\"tipo2\"]")
+                    for i, sg in enumerate(json.loads(result), 1):
+                        console.print(f"  [cyan]{i}.[/cyan] {sg}")
+                    console.print()
+                except: pass
+        console.print("  [dim]Separados por coma[/dim]")
+        val = _ask("  Tipos de empleo", default=cfg.get("job_types_raw", ""))
+        if val is None: return "back"
+        if not val: val = "software developer"
+        cfg["job_types_raw"] = val
+
+    def step_linkedin_login():
+        _setup_screen(11, 11, "Login en LinkedIn", "Se abrira Chrome para iniciar sesion")
+        if os.path.exists(SESSION_DIR):
+            console.print("  [green]>[/green] Sesion existente detectada")
+            skip = _ask("  Saltar login? (s/n)", default="s")
+            if skip is None: return "back"
+            if skip.lower() in ("s", "si", "y", "yes"):
+                return
+        _do_linkedin_login()
+
+    # ── State machine ──
+    steps = [step_gemini_key, step_gemini_model, step_gmail, step_cv,
+             step_portfolio, step_linkedin, step_cv_template, step_search_langs,
+             step_user_langs, step_work_mode, step_job_types, step_linkedin_login]
+    idx = 0
+    while idx < len(steps):
+        result = steps[idx]()
+        if result == "back":
+            idx = max(0, idx - 1)
+        else:
+            idx += 1
+
+    # Save profile + generate queries
+    cfg["profile"] = profile
     lang = cfg.get("search_languages", "3")
-    work_mode = mode_options.get(mode_choice, "Cualquiera").lower()
+    wm = mode_options.get(cfg.get("work_mode", "4"), "Cualquiera").lower()
     mode_terms_es = {"remoto": "remoto", "hibrido": "hibrido", "presencial": "presencial", "cualquiera": ""}
     mode_terms_en = {"remoto": "remote", "hibrido": "hybrid", "presencial": "onsite", "cualquiera": ""}
-    mode_es = mode_terms_es.get(work_mode, "")
-    mode_en = mode_terms_en.get(work_mode, "")
-
     queries = []
-    for jt in [j.strip() for j in job_types.split(",") if j.strip()]:
-        if lang in ("1", "3"):  # Espanol
-            queries.extend([
-                f"enviar CV {jt} {mode_es}".strip(),
-                f"busco {jt} {mode_es}".strip(),
-                f"contratando {jt} {mode_es}".strip(),
-                f"vacante {jt} {mode_es}".strip(),
-            ])
-        if lang in ("2", "3"):  # Ingles
-            queries.extend([
-                f"hiring {jt} {mode_en}".strip(),
-                f"looking for {jt} {mode_en}".strip(),
-                f"send CV {jt} {mode_en}".strip(),
-                f"job opening {jt} {mode_en}".strip(),
-            ])
+    for jt in [j.strip() for j in cfg.get("job_types_raw", "").split(",") if j.strip()]:
+        if lang in ("1", "3"):
+            queries.extend([f"enviar CV {jt} {mode_terms_es.get(wm,'')}".strip(), f"busco {jt} {mode_terms_es.get(wm,'')}".strip(),
+                            f"contratando {jt} {mode_terms_es.get(wm,'')}".strip(), f"vacante {jt} {mode_terms_es.get(wm,'')}".strip()])
+        if lang in ("2", "3"):
+            queries.extend([f"hiring {jt} {mode_terms_en.get(wm,'')}".strip(), f"looking for {jt} {mode_terms_en.get(wm,'')}".strip(),
+                            f"send CV {jt} {mode_terms_en.get(wm,'')}".strip(), f"job opening {jt} {mode_terms_en.get(wm,'')}".strip()])
     cfg["search_queries"] = queries
     save_config(cfg)
 
-    console.print()
+    # Summary
+    if console.is_terminal: console.clear()
+    console.print(get_banner())
     console.print(Panel(
-        f"[bold green]✓ Configuracion completa[/bold green]\n\n"
+        f"[bold green]> Configuracion completa[/bold green]\n\n"
         f"  [dim]Nombre[/dim]      {profile.get('name', '?')}\n"
-        f"  [dim]Correo[/dim]      {cfg['smtp_email']}\n"
-        f"  [dim]CV[/dim]          {cfg.get('cv_path', 'no configurado')}\n"
-        f"  [dim]Portfolio[/dim]   {profile.get('portfolio', '-') or '-'}\n"
-        f"  [dim]LinkedIn[/dim]    {profile.get('linkedin', '-') or '-'}\n"
-        f"  [dim]Idiomas[/dim]     {lang_options[lang_choice]}\n"
-        f"  [dim]Modalidad[/dim]   {mode_options[mode_choice]}\n"
-        f"  [dim]Ubicacion[/dim]   {cfg.get('user_location', '-') or '-'}\n"
+        f"  [dim]Correo[/dim]      {cfg.get('smtp_email', '?')}\n"
+        f"  [dim]CV[/dim]          {cfg.get('cv_path', '-')}\n"
+        f"  [dim]Modelo[/dim]      {cfg.get('gemini_model', '?')}\n"
+        f"  [dim]Plantilla[/dim]   {cfg.get('cv_template', 'modern')}\n"
         f"  [dim]Busquedas[/dim]   {len(queries)} generadas\n\n"
-        f"  Siguiente paso: [cyan]jobhunter login[/cyan]",
-        border_style="green", title="[bold]Resumen[/bold]", subtitle="[dim]JobHunter AI[/dim]"
+        f"  Siguiente paso: [cyan]jobhunter --test tu@email.com[/cyan]",
+        border_style="green", title="[bold]Resumen[/bold]"
     ))
 
 
 # ══════════════════════════════════════════════
 # LOGIN
 # ══════════════════════════════════════════════
-def cmd_login():
-    console.print(get_banner())
+def _do_linkedin_login():
+    """Shared LinkedIn login logic. Returns True if session saved."""
     kill_playwright_zombies()
     os.makedirs(SESSION_DIR, exist_ok=True)
     chrome = find_chrome()
-
-    console.print(Panel(
-        "[bold]Iniciar sesion en LinkedIn[/bold]\n\n"
-        "  1. Se abrira Chrome\n"
-        "  2. Inicia sesion con [bold]correo y contrasena[/bold]\n"
-        "     [red]NO uses el boton de Google[/red] (bloqueado en automatizado)\n"
-        "  3. Cuando estes dentro, [bold]cierra el navegador[/bold]",
-        border_style="cyan", title="[bold]Login[/bold]"
-    ))
-
+    console.print("  1. Se abrira Chrome")
+    console.print("  2. Inicia sesion con [bold]correo y contrasena[/bold]")
+    console.print("     [red]NO uses el boton de Google[/red] (bloqueado en automatizado)")
+    console.print("  3. Cuando estes dentro, [bold]cierra el navegador[/bold]")
     input("\n  Presiona Enter para abrir el navegador...")
-
     with sync_playwright() as p:
         browser = p.chromium.launch_persistent_context(
             user_data_dir=SESSION_DIR, headless=False,
@@ -522,9 +504,14 @@ def cmd_login():
                 try: _ = page.title()
                 except: break
         except: pass
+    console.print("  [green]>[/green] Sesion de LinkedIn guardada")
+    return True
 
+
+def cmd_login():
+    console.print(get_banner())
     console.print()
-    console.print("  [green]✓[/green] Sesion de LinkedIn guardada")
+    _do_linkedin_login()
     console.print()
     console.print("  [bold]Siguiente paso:[/bold]")
     console.print(f"  [cyan]jobhunter --test tu@email.com[/cyan]  prueba")
@@ -952,7 +939,8 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, export_fmt=Non
     queries = cfg.get("search_queries", ["enviar CV backend developer"])
 
     # ── Phase 1: Scrape ──
-    _phase_header("Fase 1 — Buscando en LinkedIn")
+    console.print()
+    console.print("  [bold dim]Buscando en LinkedIn...[/bold dim]")
     all_posts = []
     seen = set()
 
@@ -1016,7 +1004,8 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, export_fmt=Non
         return
 
     # ── Phase 2: Analyze (only posts with emails to save tokens) ──
-    _phase_header("Fase 2 — Analizando con Gemini AI")
+    console.print()
+    console.print("  [bold dim]Analizando ofertas...[/bold dim]")
     offers = []
 
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
@@ -1163,7 +1152,9 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, export_fmt=Non
                 console.print(f"  [red]✗[/red] Formato invalido. Ej: 1,3,5 o 'all'")
 
     # ── Phase 3: Generate & Send ──
-    _phase_header("Fase 3 — Generando CVs y enviando")
+    console.print()
+    console.print("  [bold dim]Generando y enviando...[/bold dim]")
+    console.print()
     sent = 0
     errors = 0
     results = []
@@ -1173,59 +1164,43 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, export_fmt=Non
         title = (job.get("job_title") or "Posicion")[:80]
         company = (job.get("company") or "Empresa")[:40]
         rec_email = job.get("contact_email")
-
-        console.print(f"  [bold cyan]{i}[/bold cyan][dim]/{total}[/dim]  [bold]{title}[/bold] [dim]→ {company}[/dim]")
-
-        # Generate CV (with retry)
-        cv_path = None
-        for retry in range(3):
-            with console.status(f"       [dim]Generando CV...{' (reintento)' if retry > 0 else ''}[/dim]"):
-                try:
-                    cv_data = agent_cv(cfg, job)
-                    cv_fn = get_cv_filename(company, title)
-                    cv_path = os.path.join(BASE_DIR, "output", "cvs", cv_fn)
-                    os.makedirs(os.path.dirname(cv_path), exist_ok=True)
-                    generate_cv_pdf(cv_data, cfg["profile"], cv_path, title, company, language=job.get("language", "es"), template=cfg.get("cv_template", "modern"))
-                    console.print(f"       [green]✓[/green] CV generado")
-                    break
-                except Exception as e:
-                    if retry == 2:
-                        console.print(f"       [red]✗[/red] CV fallido: {e}")
-                        errors += 1
-                    else:
-                        time.sleep(5)
-        if not cv_path:
-            continue
-        time.sleep(1)
-
-        # Generate email (with retry)
-        edata = None
-        for retry in range(3):
-            with console.status(f"       [dim]Generando email...{' (reintento)' if retry > 0 else ''}[/dim]"):
-                try:
-                    edata = agent_email(cfg, job, cv_data=cv_data)
-                    console.print(f"       [green]✓[/green] Email: {edata['subject'][:50]}")
-                    break
-                except Exception as e:
-                    if retry == 2:
-                        console.print(f"       [red]✗[/red] Email fallido: {e}")
-                        errors += 1
-                    else:
-                        time.sleep(5)
-        if not edata:
-            continue
-        time.sleep(1)
-
-        # Send
         to = test_email or rec_email
-        body = edata["body"]
-        if test_email:
-            body = f"--- RECLUTADOR: {job.get('contact_name','?')} | EMAIL: {rec_email or '?'} | {company} ---\n\n" + body
+        label = f"  [cyan]{i}[/cyan][dim]/{total}[/dim] {title} [dim]→[/dim] {company}"
 
+        # Generate CV + Email + Send under a single status spinner
+        cv_path = None
+        edata = None
         try:
-            send_email(cfg, to, edata["subject"], body, cv_path)
+            with console.status(f"{label}  [dim]CV...[/dim]") as status:
+                for retry in range(3):
+                    try:
+                        cv_data = agent_cv(cfg, job)
+                        cv_fn = get_cv_filename(company, title)
+                        cv_path = os.path.join(BASE_DIR, "output", "cvs", cv_fn)
+                        os.makedirs(os.path.dirname(cv_path), exist_ok=True)
+                        generate_cv_pdf(cv_data, cfg["profile"], cv_path, title, company, language=job.get("language", "es"), template=cfg.get("cv_template", "modern"))
+                        break
+                    except Exception as e:
+                        if retry == 2: raise
+                        time.sleep(5)
+
+                status.update(f"{label}  [dim]Email...[/dim]")
+                for retry in range(3):
+                    try:
+                        edata = agent_email(cfg, job, cv_data=cv_data)
+                        break
+                    except Exception as e:
+                        if retry == 2: raise
+                        time.sleep(5)
+
+                status.update(f"{label}  [dim]Enviando...[/dim]")
+                body = edata["body"]
+                if test_email:
+                    body = f"--- RECLUTADOR: {job.get('contact_name','?')} | EMAIL: {rec_email or '?'} | {company} ---\n\n" + body
+                send_email(cfg, to, edata["subject"], body, cv_path)
+
             sent += 1
-            console.print(f"       [green]✓[/green] Enviado → {to}")
+            console.print(f"{label}  [green]> Enviado[/green] [dim]→ {to}[/dim]")
             kb["applications"].append({
                 "date": datetime.now().isoformat(), "job_title": title,
                 "company": company, "recruiter_email": rec_email,
@@ -1233,14 +1208,13 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, export_fmt=Non
                 "post_url": job.get("post_url"),
             })
         except Exception as e:
-            console.print(f"       [red]✗[/red] Error envio: {e}")
+            console.print(f"{label}  [red]! {e}[/red]")
             errors += 1
 
         results.append({
             "job_title": title, "company": company,
             "recruiter_email": rec_email, "sent_to": to, "cv_path": cv_path,
         })
-        console.print()
         time.sleep(2)
 
     kb["runs"].append({"date": datetime.now().isoformat(), "mode": mode, "posts": len(all_posts), "offers": len(offers), "sent": sent})
@@ -1275,7 +1249,9 @@ def cmd_optimize(user_prompt=None):
         return
 
     console.print(get_banner())
-    _phase_header("Optimizando queries de busqueda")
+    console.print()
+    console.print("  [bold dim]Optimizando queries de busqueda...[/bold dim]")
+    console.print()
 
     profile = cfg.get("profile", {})
     current_queries = cfg.get("search_queries", [])
