@@ -197,10 +197,14 @@ def generate_cv_pdf(
     story = []
 
     # === HEADER ===
-    story.append(Paragraph(_safe(profile["name"]), styles["CVName"]))
+    display_name = (profile.get("name") or cv_data.get("title") or "Candidato").strip() or "Candidato"
+    story.append(Paragraph(_safe(display_name), styles["CVName"]))
     story.append(Spacer(1, 2))
     story.append(
-        Paragraph(_safe(cv_data.get("title", profile["title"])), styles["CVTitle"])
+        Paragraph(
+            _safe(cv_data.get("title") or profile.get("title") or ""),
+            styles["CVTitle"],
+        )
     )
     story.append(Spacer(1, 4))
 
@@ -221,7 +225,9 @@ def generate_cv_pdf(
 
     # === RESUMEN PROFESIONAL ===
     story.append(Paragraph(labels["summary"], styles["CVSection"]))
-    story.append(Paragraph(_safe(cv_data["summary"]), styles["CVSummary"]))
+    story.append(
+        Paragraph(_safe(cv_data.get("summary") or ""), styles["CVSummary"])
+    )
 
     # === HABILIDADES ===
     skills = cv_data.get("skills_highlighted", [])
@@ -242,14 +248,14 @@ def generate_cv_pdf(
         )
 
         for exp in experience:
-            company_name = _safe(exp["company"])
-            role_name = _safe(exp["role"])
+            company_name = _safe(exp.get("company") or "")
+            role_name = _safe(exp.get("role") or "")
             story.append(
                 Paragraph(
                     f"<b>{company_name}</b> — <i>{role_name}</i>", styles["CVCompany"]
                 )
             )
-            story.append(Paragraph(_safe(exp["period"]), styles["CVPeriod"]))
+            story.append(Paragraph(_safe(exp.get("period") or ""), styles["CVPeriod"]))
 
             for bullet in exp.get("bullets", []):
                 story.append(Paragraph(f"- {_safe(bullet)}", styles["CVBullet"]))
@@ -265,8 +271,8 @@ def generate_cv_pdf(
 
         for proj in projects:
             tech_str = _safe(", ".join(proj.get("tech", [])))
-            proj_name = _safe(proj["name"])
-            proj_desc = _safe(proj["description"])
+            proj_name = _safe(proj.get("name") or "")
+            proj_desc = _safe(proj.get("description") or "")
             story.append(
                 Paragraph(
                     f"<b>{proj_name}</b> — {proj_desc} ({tech_str})",
@@ -283,9 +289,9 @@ def generate_cv_pdf(
         )
 
         for edu in education:
-            degree = _safe(edu["degree"])
-            institution = _safe(edu["institution"])
-            period = _safe(edu["period"])
+            degree = _safe(edu.get("degree") or "")
+            institution = _safe(edu.get("institution") or "")
+            period = _safe(edu.get("period") or "")
             story.append(
                 Paragraph(
                     f"<b>{degree}</b> — {institution} ({period})", styles["CVProject"]

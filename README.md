@@ -27,6 +27,7 @@ jobhunter setup                          Configuracion inicial
 jobhunter login                          Iniciar sesion en LinkedIn
 jobhunter --test email@test.com          Prueba (envia a tu correo)
 jobhunter run                            Buscar y enviar a reclutadores
+jobhunter run --dry                      Pipeline completo sin enviar emails
 jobhunter optimize                       Optimizar queries de busqueda con IA
 jobhunter optimize "..."                 Optimizar con feedback especifico
 jobhunter status                         Ver configuracion y estadisticas
@@ -60,6 +61,22 @@ Para saltar la seleccion y enviar a todas automaticamente:
 jobhunter run --auto
 jobhunter --test mi@email.com --auto
 ```
+
+### Dry-run (generar sin enviar)
+
+Ejecuta el pipeline completo (scraping, analisis, generacion de CV y email) pero **no envia ningun email** y **no guarda aplicaciones** en el historial. Los CVs se guardan en `output/cvs/` como siempre.
+
+```
+jobhunter run --dry
+jobhunter run --dry --time week
+jobhunter --test mi@email.com --dry
+```
+
+### Preview antes de enviar
+
+Sin `--auto` y sin `--dry`, despues de generar cada CV y email se muestra un **preview** en terminal (destinatario, asunto, cuerpo, nombre del PDF). Puedes enviar, saltar, editar el asunto, o activar envio automatico del resto.
+
+Con `--auto` se mantiene el comportamiento anterior (sin preview).
 
 ### Optimizar queries de busqueda
 
