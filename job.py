@@ -812,8 +812,8 @@ def agent_cv(cfg, job):
     lang_names = {"es": "ESPAÑOL", "en": "INGLES", "pt": "PORTUGUES", "fr": "FRANCES", "de": "ALEMAN"}
     lang_name = lang_names.get(lang, "ESPAÑOL")
 
-    prompt = f"""ROLE: Eres un agente experto en redaccion de CVs profesionales.
-Tu trabajo es tomar el perfil del candidato y REESCRIBIRLO para que encaje perfectamente con una oferta especifica.
+    prompt = f"""ROLE: Eres un reclutador senior que ha revisado mas de 100,000 hojas de vida. Sabes exactamente que busca un hiring manager cuando lee un CV: relevancia inmediata, logros con numeros, y lenguaje que coincida con la oferta.
+Tu trabajo es tomar el perfil del candidato y REESCRIBIRLO desde la perspectiva de lo que el hiring manager de ESTA oferta quiere leer. No es solo hacer match de keywords — es presentar la experiencia del candidato en el orden y con el enfoque que haria que un reclutador diga "este es el candidato".
 Esto funciona para CUALQUIER tipo de trabajo: tecnologia, marketing, ventas, diseno, administracion, salud, educacion, etc.
 
 REGLAS CRITICAS:
@@ -842,11 +842,11 @@ INSTRUCCIONES PARA CADA SECCION:
 
 3. SKILLS: Reordena poniendo PRIMERO las que pide la oferta. Solo incluye skills relevantes para ESTE puesto.
 
-4. EXPERIENCE: Esta es la parte MAS IMPORTANTE.
+4. EXPERIENCE: Esta es la parte MAS IMPORTANTE. Piensa como el hiring manager que lee esto: que le haria detenerse y decir "este candidato sabe hacer lo que necesito"?
    - Para CADA experiencia laboral, reescribe los bullets para que DESTAQUEN habilidades relevantes a ESTA oferta.
-   - Conecta lo que el candidato hizo con lo que la oferta necesita.
+   - Conecta lo que el candidato hizo con lo que la oferta necesita usando el MISMO lenguaje de la descripcion del puesto.
    - Usa numeros y metricas siempre que sea posible.
-   - Cada bullet debe sonar como si el candidato hizo exactamente lo que esta oferta necesita.
+   - Prioriza los bullets que resuelven los problemas que la oferta menciona, no solo los mas impresionantes.
 
 5. PROJECTS: Selecciona solo los proyectos mas relevantes para esta oferta. Si no hay proyectos relevantes, omite esta seccion con un array vacio.
 
