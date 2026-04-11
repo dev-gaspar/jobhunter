@@ -11,88 +11,119 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #fafafa;
-            --bg-card: #ffffff;
-            --bg-code: #1a1a2e;
-            --border: #e5e5e5;
-            --text: #1a1a1a;
-            --text-secondary: #666666;
-            --accent: #0f3460;
-            --accent-light: #e8f0fe;
-            --green: #16a34a;
-            --green-light: #dcfce7;
-            --yellow: #ca8a04;
-            --yellow-light: #fef9c3;
-            --red: #dc2626;
-            --red-light: #fee2e2;
+            --bg: #000000;
+            --bg-secondary: #0a0a0a;
+            --bg-card: #111111;
+            --border: rgba(255,255,255,0.08);
+            --border-hover: rgba(255,255,255,0.15);
+            --text: #fafafa;
+            --text-secondary: #a1a1a1;
+            --text-muted: #666666;
+            --accent: #a1a1a1;
+            --accent-light: rgba(255,255,255,0.06);
+            --green: #4ade80;
+            --green-bg: rgba(74,222,128,0.1);
+            --yellow: #facc15;
+            --yellow-bg: rgba(250,204,21,0.1);
+            --red: #f87171;
+            --red-bg: rgba(248,113,113,0.1);
+            --blue: #60a5fa;
+            --blue-bg: rgba(96,165,250,0.1);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html { scroll-behavior: smooth; }
+        html { scroll-behavior: smooth; overflow-x: hidden; }
 
         body {
             font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
             background: var(--bg);
             color: var(--text);
             line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
         }
 
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            pointer-events: none;
+            opacity: 0.025;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+            background-repeat: repeat;
+            background-size: 256px;
+        }
+
+        a { color: inherit; }
         .container { max-width: 720px; margin: 0 auto; padding: 0 24px; }
 
         /* Header */
         header {
-            padding: 40px 0 32px;
+            padding: 48px 0 40px;
             text-align: center;
             border-bottom: 1px solid var(--border);
         }
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            text-decoration: none;
+            margin-bottom: 24px;
+            transition: color 0.2s;
+        }
+        .back-link:hover { color: var(--text); }
         header h1 {
             font-family: 'Outfit', sans-serif;
-            font-size: 2rem;
+            font-size: 2.2rem;
             font-weight: 800;
             margin-bottom: 8px;
+            letter-spacing: -0.03em;
         }
         header p { color: var(--text-secondary); font-size: 1.05rem; }
         .badge {
             display: inline-block;
-            background: var(--green-light);
+            background: var(--green-bg);
             color: var(--green);
             font-size: 0.8rem;
             font-weight: 600;
-            padding: 4px 12px;
+            padding: 4px 14px;
             border-radius: 20px;
             margin-bottom: 16px;
         }
 
-        /* Navigation */
+        /* Nav */
         nav {
             position: sticky;
             top: 0;
-            background: rgba(250,250,250,0.9);
-            backdrop-filter: blur(10px);
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
             border-bottom: 1px solid var(--border);
             z-index: 100;
             padding: 12px 0;
         }
         nav .container {
             display: flex;
-            gap: 8px;
+            gap: 6px;
             overflow-x: auto;
             scrollbar-width: none;
         }
         nav .container::-webkit-scrollbar { display: none; }
         nav a {
-            color: var(--text-secondary);
+            color: var(--text-muted);
             text-decoration: none;
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             font-weight: 500;
-            padding: 6px 14px;
+            padding: 6px 12px;
             border-radius: 8px;
             white-space: nowrap;
             transition: all 0.2s;
         }
         nav a:hover, nav a.active {
             background: var(--accent-light);
-            color: var(--accent);
+            color: var(--text);
         }
 
         /* Sections */
@@ -102,8 +133,9 @@
             font-family: 'Outfit', sans-serif;
             font-size: 0.8rem;
             font-weight: 700;
-            color: var(--accent);
+            color: var(--text);
             background: var(--accent-light);
+            border: 1px solid var(--border);
             width: 28px; height: 28px;
             display: inline-flex;
             align-items: center;
@@ -116,6 +148,7 @@
             font-size: 1.5rem;
             font-weight: 700;
             margin-bottom: 8px;
+            letter-spacing: -0.02em;
         }
         section > .container > p { color: var(--text-secondary); margin-bottom: 24px; }
 
@@ -126,57 +159,46 @@
             border-radius: 12px;
             padding: 20px 24px;
             margin-bottom: 16px;
+            transition: border-color 0.2s;
         }
+        .card:hover { border-color: var(--border-hover); }
         .card h3 {
             font-size: 1rem;
             font-weight: 600;
             margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
         }
         .card p, .card li { color: var(--text-secondary); font-size: 0.95rem; }
         .card ul { padding-left: 20px; }
         .card li { margin-bottom: 4px; }
+        .card a { color: var(--blue); text-decoration: none; }
+        .card a:hover { text-decoration: underline; }
 
-        /* Code blocks */
+        /* Code */
         code {
             font-family: 'JetBrains Mono', monospace;
-            background: var(--bg-code);
+            background: rgba(255,255,255,0.08);
             color: #e2e8f0;
             padding: 2px 8px;
             border-radius: 6px;
             font-size: 0.85rem;
         }
         .code-block {
-            background: var(--bg-code);
+            background: var(--bg-card);
+            border: 1px solid var(--border);
             border-radius: 12px;
             padding: 20px 24px;
             margin: 16px 0;
             overflow-x: auto;
             position: relative;
         }
-        .code-block code {
-            background: none;
-            padding: 0;
-            font-size: 0.9rem;
-            line-height: 1.6;
-        }
-        .code-label {
-            position: absolute;
-            top: 8px;
-            right: 12px;
-            font-size: 0.7rem;
-            color: #666;
-            font-family: 'JetBrains Mono', monospace;
-        }
+        .code-block code { background: none; padding: 0; font-size: 0.9rem; line-height: 1.6; }
         .copy-btn {
             position: absolute;
             bottom: 8px;
             right: 12px;
-            background: rgba(255,255,255,0.1);
-            border: none;
-            color: #999;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
             padding: 4px 10px;
             border-radius: 6px;
             cursor: pointer;
@@ -184,7 +206,7 @@
             font-family: 'JetBrains Mono', monospace;
             transition: all 0.2s;
         }
-        .copy-btn:hover { background: rgba(255,255,255,0.2); color: #fff; }
+        .copy-btn:hover { background: rgba(255,255,255,0.12); color: var(--text); }
 
         /* Alerts */
         .alert {
@@ -195,14 +217,15 @@
             display: flex;
             gap: 12px;
             align-items: flex-start;
+            border: 1px solid;
         }
-        .alert-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 2px; }
-        .alert-info { background: var(--accent-light); color: var(--accent); }
-        .alert-warn { background: var(--yellow-light); color: var(--yellow); }
-        .alert-ok { background: var(--green-light); color: var(--green); }
-        .alert-danger { background: var(--red-light); color: var(--red); }
+        .alert-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+        .alert-info { background: var(--blue-bg); color: var(--blue); border-color: rgba(96,165,250,0.2); }
+        .alert-warn { background: var(--yellow-bg); color: var(--yellow); border-color: rgba(250,204,21,0.2); }
+        .alert-ok { background: var(--green-bg); color: var(--green); border-color: rgba(74,222,128,0.2); }
+        .alert-danger { background: var(--red-bg); color: var(--red); border-color: rgba(248,113,113,0.2); }
 
-        /* Steps inside cards */
+        /* Steps list */
         .steps-list { counter-reset: step; list-style: none; padding: 0; }
         .steps-list li {
             counter-increment: step;
@@ -216,7 +239,8 @@
             left: 0;
             width: 24px; height: 24px;
             background: var(--accent-light);
-            color: var(--accent);
+            border: 1px solid var(--border);
+            color: var(--text);
             border-radius: 6px;
             font-size: 0.75rem;
             font-weight: 700;
@@ -224,14 +248,8 @@
             align-items: center;
             justify-content: center;
         }
-
-        /* Images */
-        .guide-img {
-            width: 100%;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            margin: 16px 0;
-        }
+        .steps-list a { color: var(--blue); text-decoration: none; }
+        .steps-list a:hover { text-decoration: underline; }
 
         /* Accordion */
         details {
@@ -240,7 +258,10 @@
             border-radius: 12px;
             margin-bottom: 12px;
             overflow: hidden;
+            transition: border-color 0.2s;
         }
+        details:hover { border-color: var(--border-hover); }
+        details[open] { border-color: var(--border-hover); }
         summary {
             padding: 16px 20px;
             cursor: pointer;
@@ -250,41 +271,70 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            transition: color 0.2s;
         }
+        summary:hover { color: var(--text); }
         summary::-webkit-details-marker { display: none; }
-        summary::before { content: "+"; font-size: 1.2rem; color: var(--accent); font-weight: 700; width: 20px; }
+        summary::before {
+            content: "+";
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            font-weight: 500;
+            font-family: 'JetBrains Mono', monospace;
+            width: 20px;
+            flex-shrink: 0;
+        }
         details[open] summary::before { content: "-"; }
         details .detail-body { padding: 0 20px 20px; color: var(--text-secondary); font-size: 0.9rem; }
         details .detail-body p { margin-bottom: 8px; }
-
-        /* Progress tracker */
-        .progress-bar {
-            display: flex;
-            gap: 4px;
-            margin: 32px 0 24px;
-        }
-        .progress-bar .dot {
-            flex: 1;
-            height: 4px;
-            border-radius: 2px;
-            background: var(--border);
-            transition: background 0.3s;
-        }
-        .progress-bar .dot.done { background: var(--green); }
-        .progress-bar .dot.current { background: var(--accent); }
+        details .detail-body a { color: var(--blue); text-decoration: none; }
+        details .detail-body a:hover { text-decoration: underline; }
 
         /* Footer */
         footer {
             text-align: center;
             padding: 40px 0;
-            color: var(--text-secondary);
+            color: var(--text-muted);
             font-size: 0.85rem;
+            border-top: 1px solid var(--border);
         }
-        footer a { color: var(--accent); text-decoration: none; }
+        footer a { color: var(--text-secondary); text-decoration: none; }
+        footer a:hover { color: var(--text); }
 
-        /* Responsive */
+        /* OS Selector */
+        .os-selector {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin: 24px 0 8px;
+        }
+        .os-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 10px 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .os-btn:hover { border-color: var(--border-hover); color: var(--text); }
+        .os-btn.active {
+            background: rgba(255,255,255,0.08);
+            border-color: var(--text-muted);
+            color: var(--text);
+        }
+        [data-os] { display: none; }
+        [data-os].os-visible { display: block; }
+        .card[data-os] { display: none; }
+        .card[data-os].os-visible { display: block; }
+        .steps-list li[data-os] { display: none; }
+        .steps-list li[data-os].os-visible { display: list-item; }
+
         @media (max-width: 600px) {
-            header h1 { font-size: 1.5rem; }
+            header h1 { font-size: 1.6rem; }
             section h2 { font-size: 1.25rem; }
             .code-block { padding: 16px; }
             .card { padding: 16px; }
@@ -295,29 +345,29 @@
 
 <header>
     <div class="container">
+        <a href="index.html" class="back-link">&larr; Volver a la pagina principal</a>
         <div class="badge">Guia paso a paso</div>
         <h1>Configurar JobHunter AI</h1>
         <p>Todo lo que necesitas para empezar. Sin conocimientos tecnicos.</p>
+        <div class="os-selector">
+            <button class="os-btn" onclick="setOS('windows')">Windows</button>
+            <button class="os-btn" onclick="setOS('mac')">macOS</button>
+            <button class="os-btn" onclick="setOS('linux')">Linux</button>
+        </div>
     </div>
 </header>
 
 <!-- INTRO -->
-<section style="border-bottom: 1px solid var(--border);">
+<section>
     <div class="container">
         <h2>Por que existe esta herramienta?</h2>
-        <p style="color: var(--text-secondary); margin-top: 12px;">
-            Cuando buscas empleo, normalmente haces esto: abres LinkedIn, buscas ofertas una por una, copias tu CV, lo envias tal cual a cada empresa... y repites. El problema es que un CV generico tiene menos del 2% de probabilidad de recibir respuesta.
-        </p>
-        <p style="color: var(--text-secondary); margin-top: 12px;">
-            JobHunter automatiza ese proceso. Busca ofertas en LinkedIn, identifica cuales son reales y tienen email del reclutador, y para cada una genera un CV adaptado a lo que esa oferta pide. Despues escribe un email corto y directo, y lo envia. Todo desde tu computadora, con tus datos, sin intermediarios.
-        </p>
-        <p style="color: var(--text-secondary); margin-top: 12px;">
-            No es un hack ni hace nada ilegal. Simplemente navega LinkedIn como lo harias tu, pero mas rapido. Y usa inteligencia artificial (Google Gemini, gratuita) para adaptar tu experiencia real al lenguaje de cada oferta. No inventa nada.
-        </p>
+        <p>Cuando buscas empleo, normalmente haces esto: abres LinkedIn, buscas ofertas una por una, copias tu CV, lo envias tal cual a cada empresa... y repites. El problema es que un CV generico casi nunca recibe respuesta.</p>
+        <p>JobHunter automatiza ese proceso. Busca ofertas en LinkedIn, identifica cuales son reales y tienen email del reclutador, y para cada una genera un CV adaptado a lo que esa oferta pide. Despues escribe un email corto y directo, y lo envia. Todo desde tu computadora, con tus datos, sin intermediarios.</p>
+        <p>No es un hack ni hace nada ilegal. Simplemente navega LinkedIn como lo harias tu, pero mas rapido. Y usa inteligencia artificial (Google Gemini, gratuita) para adaptar tu experiencia real al lenguaje de cada oferta. No inventa nada.</p>
     </div>
 </section>
 
-<nav id="nav">
+<nav>
     <div class="container">
         <a href="#terminal">Terminal</a>
         <a href="#requisitos">Requisitos</a>
@@ -337,35 +387,32 @@
         <h2>Que es la terminal y como abrirla</h2>
         <p>La terminal es una aplicacion que ya viene en tu computadora. Es como un chat donde escribes comandos y la computadora los ejecuta. No necesitas saber programar para usarla.</p>
 
-        <div class="card">
-            <h3>Windows</h3>
+        <div class="card" data-os="windows">
+            <h3>Abrir PowerShell</h3>
             <ol class="steps-list">
                 <li>Presiona la tecla <strong>Windows</strong> en tu teclado</li>
                 <li>Escribe <strong>PowerShell</strong></li>
                 <li>Haz clic en <strong>Windows PowerShell</strong> (la primera opcion)</li>
             </ol>
-            <p style="margin-top: 8px;">Se abrira una ventana oscura con texto. Eso es la terminal. Ahi es donde vas a pegar los comandos de esta guia.</p>
+            <p style="margin-top: 8px;">Se abrira una ventana oscura con texto. Eso es la terminal. Para pegar comandos usa <strong>Ctrl + V</strong> o clic derecho.</p>
         </div>
 
-        <div class="card">
-            <h3>macOS</h3>
+        <div class="card" data-os="mac">
+            <h3>Abrir Terminal</h3>
             <ol class="steps-list">
                 <li>Presiona <strong>Cmd + Espacio</strong> (abre Spotlight)</li>
                 <li>Escribe <strong>Terminal</strong></li>
                 <li>Presiona <strong>Enter</strong></li>
             </ol>
+            <p style="margin-top: 8px;">Para pegar comandos usa <strong>Cmd + V</strong>.</p>
         </div>
 
-        <div class="card">
-            <h3>Linux</h3>
+        <div class="card" data-os="linux">
+            <h3>Abrir Terminal</h3>
             <ol class="steps-list">
                 <li>Presiona <strong>Ctrl + Alt + T</strong></li>
             </ol>
-        </div>
-
-        <div class="alert alert-info">
-            <span class="alert-icon">i</span>
-            <div>Para pegar un comando en la terminal: en Windows usa <strong>Ctrl + V</strong> o clic derecho. En Mac usa <strong>Cmd + V</strong>. Despues presiona <strong>Enter</strong> para ejecutarlo.</div>
+            <p style="margin-top: 8px;">Para pegar comandos usa <strong>Ctrl + Shift + V</strong>.</p>
         </div>
     </div>
 </section>
@@ -375,21 +422,21 @@
     <div class="container">
         <div class="section-num">0</div>
         <h2>Antes de empezar</h2>
-        <p>Necesitas tener estas 3 cosas instaladas. Son programas gratuitos y seguros. Si ya los tienes, salta al paso 1.</p>
+        <p>Necesitas 3 programas instalados. Son gratuitos y seguros. Si ya los tienes, salta al paso 1.</p>
 
         <div class="card">
             <h3>Python 3.10 o superior</h3>
-            <p>Es el lenguaje en que esta hecho JobHunter. Verificalo abriendo tu terminal y escribiendo:</p>
+            <p>Es el lenguaje en que esta hecho JobHunter. Verificalo escribiendo en la terminal:</p>
             <div class="code-block">
                 <code>python --version</code>
                 <button class="copy-btn" onclick="copy(this)">copiar</button>
             </div>
-            <p>Si no lo tienes, descargalo de <a href="https://www.python.org/downloads/" target="_blank" style="color: var(--accent);">python.org</a></p>
+            <p>Si no lo tienes: <a href="https://www.python.org/downloads/" target="_blank">python.org</a></p>
         </div>
 
         <div class="card">
             <h3>Google Chrome o Microsoft Edge</h3>
-            <p>JobHunter usa el navegador para acceder a LinkedIn. Debe estar instalado en tu computadora (no necesitas abrirlo, el programa lo hace solo).</p>
+            <p>JobHunter usa el navegador para acceder a LinkedIn. Solo necesitas tenerlo instalado, el programa lo abre solo.</p>
         </div>
 
         <div class="card">
@@ -399,7 +446,7 @@
                 <code>git --version</code>
                 <button class="copy-btn" onclick="copy(this)">copiar</button>
             </div>
-            <p>Si no lo tienes: <a href="https://git-scm.com/downloads" target="_blank" style="color: var(--accent);">git-scm.com</a></p>
+            <p>Si no lo tienes: <a href="https://git-scm.com/downloads" target="_blank">git-scm.com</a></p>
         </div>
     </div>
 </section>
@@ -409,33 +456,40 @@
     <div class="container">
         <div class="section-num">1</div>
         <h2>Instalar JobHunter</h2>
-        <p>Abre tu terminal y pega el comando de instalacion segun tu sistema operativo.</p>
+        <p>Abre tu terminal y pega el comando segun tu sistema operativo.</p>
 
-        <div class="card">
-            <h3>macOS / Linux</h3>
-            <div class="code-block">
-                <code>curl -sSL https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.sh | bash</code>
-                <button class="copy-btn" onclick="copy(this)">copiar</button>
-            </div>
-        </div>
-
-        <div class="card">
-            <h3>Windows (PowerShell)</h3>
-            <p>Abre PowerShell (buscalo en el menu de inicio) y pega:</p>
+        <div class="card" data-os="windows">
+            <h3>Pega este comando en PowerShell</h3>
             <div class="code-block">
                 <code>irm https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.ps1 | iex</code>
                 <button class="copy-btn" onclick="copy(this)">copiar</button>
             </div>
         </div>
 
+        <div class="card" data-os="mac">
+            <h3>Pega este comando en Terminal</h3>
+            <div class="code-block">
+                <code>curl -sSL https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.sh | bash</code>
+                <button class="copy-btn" onclick="copy(this)">copiar</button>
+            </div>
+        </div>
+
+        <div class="card" data-os="linux">
+            <h3>Pega este comando en Terminal</h3>
+            <div class="code-block">
+                <code>curl -sSL https://raw.githubusercontent.com/dev-gaspar/jobhunter/main/install.sh | bash</code>
+                <button class="copy-btn" onclick="copy(this)">copiar</button>
+            </div>
+        </div>
+
         <div class="alert alert-ok">
-            <span class="alert-icon">></span>
-            <div>Cuando termine, escribe <code>jobhunter help</code> para verificar que se instalo correctamente.</div>
+            <span class="alert-icon">&gt;</span>
+            <div>Cuando termine, escribe <code>jobhunter help</code> para verificar que se instalo.</div>
         </div>
     </div>
 </section>
 
-<!-- GEMINI API KEY -->
+<!-- GEMINI -->
 <section id="gemini">
     <div class="container">
         <div class="section-num">2</div>
@@ -445,17 +499,17 @@
         <div class="card">
             <h3>Como obtenerla</h3>
             <ol class="steps-list">
-                <li>Ve a <a href="https://aistudio.google.com/apikey" target="_blank" style="color: var(--accent);">aistudio.google.com/apikey</a></li>
+                <li>Ve a <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a></li>
                 <li>Inicia sesion con tu cuenta de Google</li>
                 <li>Haz clic en <strong>"Create API Key"</strong></li>
                 <li>Selecciona cualquier proyecto (o crea uno nuevo)</li>
-                <li>Copia la clave que aparece. Empieza con <code>AIza...</code></li>
+                <li>Copia la clave. Empieza con <code>AIza...</code></li>
             </ol>
         </div>
 
         <div class="alert alert-info">
             <span class="alert-icon">i</span>
-            <div>La clave es gratuita y tiene un limite generoso. No necesitas tarjeta de credito.</div>
+            <div>La clave es gratuita. No necesitas tarjeta de credito.</div>
         </div>
 
         <div class="alert alert-danger">
@@ -465,7 +519,7 @@
     </div>
 </section>
 
-<!-- GMAIL APP PASSWORD -->
+<!-- GMAIL -->
 <section id="gmail">
     <div class="container">
         <div class="section-num">3</div>
@@ -474,22 +528,22 @@
 
         <div class="alert alert-warn">
             <span class="alert-icon">!</span>
-            <div>Requisito: tu cuenta de Gmail debe tener la <strong>verificacion en dos pasos activada</strong>. Si no la tienes, activala primero en <a href="https://myaccount.google.com/signinoptions/two-step-verification" target="_blank" style="color: inherit; text-decoration: underline;">este enlace</a>.</div>
+            <div>Requisito: tu Gmail debe tener <strong>verificacion en dos pasos activada</strong>. Si no la tienes, activala en <a href="https://myaccount.google.com/signinoptions/two-step-verification" target="_blank" style="color: inherit; text-decoration: underline;">este enlace</a>.</div>
         </div>
 
         <div class="card">
             <h3>Crear contrasena de aplicacion</h3>
             <ol class="steps-list">
-                <li>Ve a <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color: var(--accent);">myaccount.google.com/apppasswords</a></li>
+                <li>Ve a <a href="https://myaccount.google.com/apppasswords" target="_blank">myaccount.google.com/apppasswords</a></li>
                 <li>En "Nombre de la app" escribe <strong>JobHunter</strong></li>
                 <li>Haz clic en <strong>"Crear"</strong></li>
-                <li>Google te mostrara una contrasena de 16 caracteres. Copiala.</li>
+                <li>Copia la contrasena de 16 caracteres que aparece</li>
             </ol>
         </div>
 
         <div class="alert alert-danger">
             <span class="alert-icon">!</span>
-            <div>Esta contrasena solo se muestra una vez. Si la pierdes, tendras que crear una nueva.</div>
+            <div>Esta contrasena solo se muestra una vez. Si la pierdes, crea una nueva.</div>
         </div>
     </div>
 </section>
@@ -499,14 +553,12 @@
     <div class="container">
         <div class="section-num">4</div>
         <h2>Configurar JobHunter</h2>
-        <p>Ahora ejecuta el wizard de configuracion. Te guiara paso a paso.</p>
+        <p>Ejecuta el wizard de configuracion. Te guiara paso a paso con una barra de progreso.</p>
 
         <div class="code-block">
             <code>jobhunter setup</code>
             <button class="copy-btn" onclick="copy(this)">copiar</button>
         </div>
-
-        <p>El setup tiene 11 pasos con una barra de progreso. Responde cada pregunta y presiona Enter.</p>
 
         <div class="alert alert-info">
             <span class="alert-icon">i</span>
@@ -523,44 +575,43 @@
         <details>
             <summary>Paso 2 — Modelo de Gemini</summary>
             <div class="detail-body">
-                <p>Selecciona el modelo de IA. Recomendado: <strong>gemini-2.5-flash</strong> (opcion 1). Es rapido y gratuito.</p>
+                <p>Recomendado: <strong>gemini-2.5-flash</strong> (opcion 1). Es rapido y gratuito.</p>
             </div>
         </details>
 
         <details>
             <summary>Paso 3 — Gmail + Contrasena de aplicacion</summary>
             <div class="detail-body">
-                <p>Escribe tu email de Gmail y la contrasena de aplicacion que creaste en el paso 3 de esta guia. El programa verifica la conexion.</p>
+                <p>Escribe tu Gmail y la contrasena de aplicacion del paso 3. El programa verifica la conexion.</p>
             </div>
         </details>
 
         <details>
             <summary>Paso 4 — Tu CV actual</summary>
             <div class="detail-body">
-                <p>Arrastra tu CV en PDF a la terminal, o escribe la ruta del archivo. La IA leera tu CV y extraera toda tu informacion automaticamente.</p>
-                <p>Ejemplo de ruta en Windows: <code>C:\Users\tu_nombre\Documents\mi_cv.pdf</code></p>
-                <p>Ejemplo en Mac: <code>/Users/tu_nombre/Documents/mi_cv.pdf</code></p>
+                <p>Arrastra tu CV en PDF a la terminal, o escribe la ruta del archivo. La IA lo lee y extrae tu informacion.</p>
+                <p>Ejemplo: <code class="os-path-example"></code></p>
             </div>
         </details>
 
         <details>
             <summary>Paso 5 — Portfolio (opcional)</summary>
             <div class="detail-body">
-                <p>Si tienes un sitio web personal o portfolio, pega la URL. Si no, presiona Enter para saltar.</p>
+                <p>URL de tu sitio web personal. Si no tienes, presiona Enter para saltar.</p>
             </div>
         </details>
 
         <details>
             <summary>Paso 6 — LinkedIn</summary>
             <div class="detail-body">
-                <p>Pega la URL de tu perfil de LinkedIn. Ejemplo: <code>https://linkedin.com/in/tu-nombre</code></p>
+                <p>URL de tu perfil. Ejemplo: <code>https://linkedin.com/in/tu-nombre</code></p>
             </div>
         </details>
 
         <details>
             <summary>Paso 7 — Plantilla de CV</summary>
             <div class="detail-body">
-                <p>Elige como se vera tu CV generado. Hay 4 opciones:</p>
+                <p>4 estilos disponibles:</p>
                 <ul>
                     <li><strong>Modern</strong> — Limpio con acentos de color (recomendado)</li>
                     <li><strong>Minimal</strong> — Espacioso, elegante</li>
@@ -573,15 +624,15 @@
         <details>
             <summary>Paso 8 — Idiomas de busqueda</summary>
             <div class="detail-body">
-                <p>En que idioma quieres buscar ofertas en LinkedIn. Puedes elegir espanol, ingles, o ambos.</p>
+                <p>En que idioma buscar ofertas en LinkedIn: espanol, ingles, o ambos.</p>
             </div>
         </details>
 
         <details>
             <summary>Paso 9 — Tus idiomas</summary>
             <div class="detail-body">
-                <p>Que idiomas manejas y a que nivel. Esto se usa para filtrar ofertas que requieran idiomas que no dominas.</p>
-                <p>Formato: <code>Espanol:Nativo, Ingles:B1, Portugues:Basico</code></p>
+                <p>Que idiomas manejas y a que nivel. Se usa para filtrar ofertas que pidan idiomas que no dominas.</p>
+                <p>Formato: <code>Espanol:Nativo, Ingles:B1</code></p>
                 <p>Niveles: Nativo, Avanzado (C1-C2), Intermedio (B1-B2), Basico (A1-A2)</p>
             </div>
         </details>
@@ -589,22 +640,21 @@
         <details>
             <summary>Paso 10 — Modalidad de trabajo</summary>
             <div class="detail-body">
-                <p>Que tipo de modalidad prefieres: Remoto, Hibrido, Presencial, o Cualquiera. Si eliges hibrido o presencial, te pedira tu ubicacion.</p>
+                <p>Remoto, Hibrido, Presencial, o Cualquiera. Si eliges hibrido o presencial, te pedira tu ubicacion.</p>
             </div>
         </details>
 
         <details>
             <summary>Paso 11 — Tipo de empleo + Login LinkedIn</summary>
             <div class="detail-body">
-                <p>Escribe los tipos de empleo que buscas separados por coma. Ejemplo: <code>Backend Developer, Full Stack, Data Engineer</code></p>
-                <p>La IA te sugerira opciones basadas en tu CV.</p>
-                <p>Luego se abrira Chrome para que inicies sesion en LinkedIn. Inicia sesion normalmente con correo y contrasena (no uses el boton de Google), y cuando estes dentro, cierra el navegador.</p>
+                <p>Tipos de empleo separados por coma. Ejemplo: <code>Backend Developer, Full Stack, Data Engineer</code></p>
+                <p>Luego se abre Chrome para iniciar sesion en LinkedIn. Usa correo y contrasena (no el boton de Google). Cuando estes dentro, cierra el navegador.</p>
             </div>
         </details>
 
         <div class="alert alert-ok">
-            <span class="alert-icon">></span>
-            <div>Al terminar veras un resumen con toda tu configuracion. Ya estas listo para buscar empleo.</div>
+            <span class="alert-icon">&gt;</span>
+            <div>Al terminar veras un resumen con toda tu configuracion. Ya estas listo.</div>
         </div>
     </div>
 </section>
@@ -614,7 +664,7 @@
     <div class="container">
         <div class="section-num">5</div>
         <h2>Buscar ofertas y aplicar</h2>
-        <p>Ya esta todo configurado. Ahora solo ejecuta:</p>
+        <p>Todo configurado. Ahora ejecuta:</p>
 
         <div class="code-block">
             <code>jobhunter run</code>
@@ -637,8 +687,8 @@
         <div class="card">
             <h3>Opciones utiles</h3>
             <ul>
-                <li><code>jobhunter run --time week</code> — buscar ofertas de esta semana</li>
-                <li><code>jobhunter run --time month</code> — buscar ofertas del mes</li>
+                <li><code>jobhunter run --time week</code> — ofertas de esta semana</li>
+                <li><code>jobhunter run --time month</code> — ofertas del mes</li>
                 <li><code>jobhunter run --auto</code> — aplicar a todas sin preguntar</li>
                 <li><code>jobhunter --test tu@email.com</code> — modo prueba (te envia a ti)</li>
             </ul>
@@ -646,17 +696,17 @@
 
         <div class="alert alert-info">
             <span class="alert-icon">i</span>
-            <div>Recomendacion: la primera vez usa el modo prueba con <code>jobhunter --test tu@email.com</code> para ver como quedan los CVs y emails antes de enviar a reclutadores reales.</div>
+            <div>La primera vez usa <code>jobhunter --test tu@email.com</code> para ver como quedan los CVs y emails antes de enviar a reclutadores reales.</div>
         </div>
 
         <div class="card">
             <h3>Otros comandos</h3>
             <ul>
-                <li><code>jobhunter history</code> — ver historial de aplicaciones</li>
-                <li><code>jobhunter blacklist add "Empresa"</code> — bloquear una empresa</li>
+                <li><code>jobhunter history</code> — historial de aplicaciones</li>
+                <li><code>jobhunter blacklist add "Empresa"</code> — bloquear empresa</li>
                 <li><code>jobhunter optimize</code> — mejorar busquedas con IA</li>
-                <li><code>jobhunter status</code> — ver tu configuracion</li>
-                <li><code>jobhunter update</code> — actualizar a la ultima version</li>
+                <li><code>jobhunter status</code> — ver configuracion</li>
+                <li><code>jobhunter update</code> — actualizar</li>
             </ul>
         </div>
     </div>
@@ -667,61 +717,54 @@
     <div class="container">
         <div class="section-num">?</div>
         <h2>Preguntas frecuentes</h2>
-        <p>Dudas comunes al usar JobHunter por primera vez.</p>
+        <p>Dudas comunes al usar JobHunter.</p>
 
         <details>
             <summary>Es gratis?</summary>
             <div class="detail-body">
-                <p>Si. JobHunter es open source y gratuito. La API de Gemini tambien tiene un plan gratuito con un limite generoso que es suficiente para uso normal.</p>
+                <p>Si. JobHunter es open source y gratuito. La API de Gemini tiene un plan gratuito suficiente para uso normal.</p>
             </div>
         </details>
 
         <details>
             <summary>Es seguro? Mis datos estan protegidos?</summary>
             <div class="detail-body">
-                <p>Todo se ejecuta en tu computadora. Tus datos (CV, claves, historial) se guardan localmente y nunca se suben a ningun servidor. El unico servicio externo que se usa es la IA de Google para analizar ofertas y generar CVs.</p>
+                <p>Todo se ejecuta en tu computadora. Tus datos nunca se suben a ningun servidor. El unico servicio externo es la IA de Google para analizar ofertas.</p>
             </div>
         </details>
 
         <details>
             <summary>Que pasa si mi sesion de LinkedIn expira?</summary>
             <div class="detail-body">
-                <p>Ejecuta <code>jobhunter login</code> para volver a iniciar sesion. La nueva sesion se guarda automaticamente.</p>
+                <p>Ejecuta <code>jobhunter login</code> para volver a iniciar sesion.</p>
             </div>
         </details>
 
         <details>
-            <summary>Puedo cambiar mi CV o configuracion despues?</summary>
+            <summary>Puedo cambiar mi configuracion despues?</summary>
             <div class="detail-body">
-                <p>Si. Ejecuta <code>jobhunter setup</code> de nuevo. Tus datos anteriores aparecen como valores por defecto, solo cambia lo que necesites.</p>
+                <p>Si. Ejecuta <code>jobhunter setup</code> de nuevo. Tus datos anteriores aparecen como valores por defecto.</p>
             </div>
         </details>
 
         <details>
             <summary>La IA inventa cosas en mi CV?</summary>
             <div class="detail-body">
-                <p>No. La IA solo reordena y destaca lo que ya esta en tu perfil real. No agrega habilidades, idiomas, ni logros que no tengas. Si una oferta pide algo que no tienes, simplemente no lo menciona.</p>
+                <p>No. Solo reordena y destaca lo que ya esta en tu perfil. No agrega habilidades ni logros que no tengas.</p>
             </div>
         </details>
 
         <details>
             <summary>Funciona para cualquier sector?</summary>
             <div class="detail-body">
-                <p>Si. Tecnologia, marketing, diseno, ventas, administracion, salud, educacion... cualquier sector donde se publiquen ofertas en LinkedIn.</p>
+                <p>Si. Tecnologia, marketing, diseno, ventas, administracion, salud, educacion... cualquier sector con ofertas en LinkedIn.</p>
             </div>
         </details>
 
         <details>
             <summary>Que hago si me sale un error?</summary>
             <div class="detail-body">
-                <p>La mayoria de errores son temporales (limite de la API, conexion lenta). Espera unos minutos e intentalo de nuevo. Si el error persiste, abre un issue en <a href="https://github.com/dev-gaspar/jobhunter/issues" target="_blank" style="color: var(--accent);">GitHub</a>.</p>
-            </div>
-        </details>
-
-        <details>
-            <summary>Puedo usar otra IA que no sea Gemini?</summary>
-            <div class="detail-body">
-                <p>Por ahora solo se soporta Gemini. Es gratuito y funciona bien para este proposito.</p>
+                <p>La mayoria de errores son temporales. Espera unos minutos e intenta de nuevo. Si persiste, abre un issue en <a href="https://github.com/dev-gaspar/jobhunter/issues" target="_blank">GitHub</a>.</p>
             </div>
         </details>
     </div>
@@ -729,8 +772,8 @@
 
 <footer>
     <div class="container">
-        <p>JobHunter AI — Open source</p>
-        <p><a href="https://github.com/dev-gaspar/jobhunter" target="_blank">GitHub</a> · <a href="https://dev-gaspar.github.io/jobhunter/" target="_blank">Landing page</a></p>
+        <p>JobHunter AI</p>
+        <p><a href="https://github.com/dev-gaspar/jobhunter" target="_blank">GitHub</a> &middot; <a href="index.html">Pagina principal</a></p>
     </div>
 </footer>
 
@@ -742,7 +785,36 @@ function copy(btn) {
     setTimeout(() => btn.textContent = 'copiar', 1500);
 }
 
-// Active nav link on scroll
+// OS Selection
+const pathExamples = {
+    windows: 'C:\\Users\\tu_nombre\\Documents\\mi_cv.pdf',
+    mac: '/Users/tu_nombre/Documents/mi_cv.pdf',
+    linux: '~/Documents/mi_cv.pdf'
+};
+
+function setOS(os) {
+    localStorage.setItem('jobhunter-os', os);
+    document.querySelectorAll('.os-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`.os-btn[onclick="setOS('${os}')"]`).classList.add('active');
+    document.querySelectorAll('[data-os]').forEach(el => {
+        el.classList.toggle('os-visible', el.getAttribute('data-os') === os);
+    });
+    document.querySelectorAll('.os-path-example').forEach(el => {
+        el.textContent = pathExamples[os] || pathExamples.windows;
+    });
+}
+
+// Auto-detect OS or restore from localStorage
+(function() {
+    const saved = localStorage.getItem('jobhunter-os');
+    if (saved) { setOS(saved); return; }
+    const ua = navigator.userAgent.toLowerCase();
+    if (ua.includes('win')) setOS('windows');
+    else if (ua.includes('mac')) setOS('mac');
+    else setOS('linux');
+})();
+
+// Active nav on scroll
 const sections = document.querySelectorAll('section[id]');
 const navLinks = document.querySelectorAll('nav a');
 window.addEventListener('scroll', () => {
