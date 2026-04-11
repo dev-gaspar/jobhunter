@@ -12,7 +12,7 @@ Uso:
     jobhunter status                Ver configuracion y estadisticas
     jobhunter setup                 Configuracion inicial
 """
-import json, os, sys, re, time, smtplib, subprocess, shutil, requests, base64
+import json, os, sys, re, time, random, smtplib, subprocess, shutil, requests, base64
 import urllib.parse
 from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
@@ -212,104 +212,197 @@ def kill_playwright_zombies():
 # ══════════════════════════════════════════════
 # SETUP WIZARD
 # ══════════════════════════════════════════════
-def _step_header(num, total, title, subtitle=None):
-    """Print a styled step header."""
+BACK = "<"
+
+def _setup_screen(current, total, title, subtitle=None):
+    """Clear screen and show setup step with percentage bar."""
+    if console.is_terminal:
+        console.clear()
+    console.print(get_banner())
+    pct = int((current / total) * 100)
+    filled = int(pct / 5)
+    bar = "[cyan]" + "█" * filled + "[/cyan]" + "[dim]" + "░" * (20 - filled) + "[/dim]"
+    console.print(f"  {bar}  [bold]{pct}%[/bold]")
     console.print()
-    progress_bar = "[cyan]" + "━" * num + "[/cyan]" + "[dim]" + "╌" * (total - num) + "[/dim]"
-    console.print(f"  {progress_bar}  [dim]{num}/{total}[/dim]")
     console.print(f"  [bold]{title}[/bold]")
     if subtitle:
         console.print(f"  [dim]{subtitle}[/dim]")
+    if current > 0:
+        console.print(f"  [dim]Escribe '<' para volver[/dim]")
+    console.print()
 
-def _phase_header(title):
-    """Print a styled phase header for run command."""
-    console.print()
-    console.print(Rule(f"[bold]{title}[/bold]", style="cyan"))
-    console.print()
+def _ask(label, **kwargs):
+    """Prompt wrapper that detects '<' for go-back navigation and cleans input."""
+    val = Prompt.ask(label, **kwargs)
+    val = val.strip().strip('"').strip("'")
+    if val == BACK:
+        return None
+    return val
 
 
 def cmd_setup():
-    console.print(get_banner())
-    total_steps = 8
-
     cfg = load_config()
+    profile = cfg.get("profile", {})
+    from src.cv_templates import TEMPLATES, DEFAULT_TEMPLATE
 
-    # 1. Gemini
-    _step_header(1, total_steps, "Clave API de Gemini", "Obtienla gratis en https://aistudio.google.com/apikey")
-    while True:
-        key = Prompt.ask("  Clave API", default=cfg.get("gemini_api_key", ""))
-        if not key:
-            console.print("  [red]La clave API es obligatoria.[/red]")
-            continue
-        with console.status("  [dim]Verificando...[/dim]"):
-            try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
-                requests.post(url, json={"contents":[{"parts":[{"text":"test"}]}]}, timeout=10).raise_for_status()
-                console.print("  [green]✓[/green] Clave valida")
-                cfg["gemini_api_key"] = key
-                break
-            except:
-                console.print("  [red]✗[/red] Clave API invalida. Intentalo de nuevo.")
+    lang_options = {"1": "Espanol", "2": "Ingles", "3": "Espanol e Ingles"}
+    mode_options = {"1": "Remoto", "2": "Hibrido", "3": "Presencial", "4": "Cualquiera"}
 
-    # 1b. Modelo de Gemini
-    console.print()
-    console.print(f"  [bold]Modelo de Gemini[/bold]")
-    current_model = cfg.get("gemini_model", "gemini-2.5-flash")
-    for i, m in enumerate(GEMINI_MODELS, 1):
-        marker = " [green]◄ actual[/green]" if m == current_model else ""
-        console.print(f"  [cyan]{i}.[/cyan] {m}{marker}")
-    while True:
-        choice = Prompt.ask("  Selecciona modelo", default=str(GEMINI_MODELS.index(current_model) + 1 if current_model in GEMINI_MODELS else 1))
+    TOTAL = 7
+    # ── Step functions: return "back" to go back, anything else continues ──
+
+    def step_links():
+        _setup_screen(0, TOTAL, "Links profesionales", "Opcional, Enter para saltar")
+        portfolio = _ask("  Portfolio / web personal", default=profile.get("portfolio", ""))
+        if portfolio is None: return "back"
+        profile["portfolio"] = portfolio
+        console.print()
+        linkedin = _ask("  Perfil de LinkedIn", default=profile.get("linkedin", ""))
+        if linkedin is None: return "back"
+        profile["linkedin"] = linkedin
+
+    def step_job_types():
+        _setup_screen(1, TOTAL, "Que tipo de empleo buscas?")
+        if cfg.get("gemini_api_key") and profile.get("skills"):
+            with console.status("  [dim]Generando sugerencias...[/dim]"):
+                try:
+                    s = json.dumps(profile.get("skills",{}))
+                    e = json.dumps(profile.get("experience",[])[:3])
+                    result = call_gemini(cfg, f"Basado en skills: {s} y experiencia: {e}, sugiere 6 tipos de empleo. JSON array: [\"tipo1\",\"tipo2\"]")
+                    for i, sg in enumerate(json.loads(result), 1):
+                        console.print(f"  [cyan]{i}.[/cyan] {sg}")
+                    console.print()
+                except: pass
+        console.print("  [dim]Separados por coma[/dim]")
+        val = _ask("  Tipos de empleo", default=cfg.get("job_types_raw", ""))
+        if val is None: return "back"
+        if not val: val = "software developer"
+        cfg["job_types_raw"] = val
+
+    def step_preferences():
+        _setup_screen(2, TOTAL, "Preferencias", "Idiomas, modalidad y plantilla de CV")
+        # Search languages
+        console.print("  [bold]Idiomas de busqueda[/bold]")
+        for k, v in lang_options.items():
+            console.print(f"  [cyan]{k}.[/cyan] {v}")
+        choice = _ask("  Selecciona", default=cfg.get("search_languages", "3"))
+        if choice is None: return "back"
+        cfg["search_languages"] = choice if choice in lang_options else "3"
+        # User languages
+        console.print()
+        console.print("  [bold]Tus idiomas y nivel[/bold] [dim](Ej: Espanol:Nativo, Ingles:B1)[/dim]")
+        existing = cfg.get("user_languages", [])
+        default = ", ".join(lang["language"] + ":" + lang["level"] for lang in existing) if existing else ""
+        val = _ask("  Idiomas", default=default)
+        if val is None: return "back"
+        langs = []
+        for part in val.split(","):
+            part = part.strip()
+            if ":" in part:
+                n, lv = part.split(":", 1)
+                langs.append({"language": n.strip(), "level": lv.strip()})
+            elif part:
+                langs.append({"language": part, "level": "Nativo"})
+        cfg["user_languages"] = langs
+        # Work mode
+        console.print()
+        console.print("  [bold]Modalidad de trabajo[/bold]")
+        for k, v in mode_options.items():
+            console.print(f"  [cyan]{k}.[/cyan] {v}")
+        choice = _ask("  Selecciona", default=cfg.get("work_mode", "4"))
+        if choice is None: return "back"
+        if choice not in mode_options: choice = "4"
+        cfg["work_mode"] = choice
+        cfg["work_mode_label"] = mode_options[choice]
+        if choice in ("2", "3"):
+            console.print()
+            loc = _ask("  Tu ubicacion (ciudad, pais)", default=cfg.get("user_location", profile.get("location", "")))
+            if loc is None: return "back"
+            cfg["user_location"] = loc
+        else:
+            cfg["user_location"] = cfg.get("user_location", "")
+        # CV template
+        console.print()
+        console.print("  [bold]Plantilla de CV[/bold]")
+        current_tmpl = cfg.get("cv_template", DEFAULT_TEMPLATE)
+        tmpl_keys = list(TEMPLATES.keys())
+        for i, key in enumerate(tmpl_keys, 1):
+            t = TEMPLATES[key]
+            marker = " [green]<< actual[/green]" if key == current_tmpl else ""
+            console.print(f"  [cyan]{i}.[/cyan] {t['name']} — [dim]{t['description']}[/dim]{marker}")
+        choice = _ask("  Selecciona", default=str(tmpl_keys.index(current_tmpl) + 1))
+        if choice is None: return "back"
         try:
             idx = int(choice) - 1
-            if 0 <= idx < len(GEMINI_MODELS):
-                cfg["gemini_model"] = GEMINI_MODELS[idx]
-                console.print(f"  [green]✓[/green] {GEMINI_MODELS[idx]}")
-                break
-        except ValueError:
-            pass
-        console.print(f"  [red]✗[/red] Selecciona un numero del 1 al {len(GEMINI_MODELS)}")
+            if 0 <= idx < len(tmpl_keys): cfg["cv_template"] = tmpl_keys[idx]
+        except ValueError: pass
 
-    # 2. Gmail
-    _step_header(2, total_steps, "Correo Gmail + Contrasena de aplicacion", "Cuenta Google > Seguridad > Contrasenas de aplicacion")
-    while True:
-        email = Prompt.ask("  Gmail", default=cfg.get("smtp_email", ""))
-        if not re.match(r'^[^@]+@gmail\.com$', email):
-            console.print("  [red]✗[/red] Debe ser una cuenta @gmail.com")
-            continue
-        pwd = Prompt.ask("  Contrasena de app", default=cfg.get("smtp_password",""), password=True)
-        if not pwd or len(pwd) < 10:
-            console.print("  [red]✗[/red] La contrasena de aplicacion debe tener al menos 16 caracteres")
-            continue
-        with console.status("  [dim]Verificando SMTP...[/dim]"):
-            try:
-                with smtplib.SMTP("smtp.gmail.com", 587) as s:
-                    s.starttls(); s.login(email, pwd)
-                console.print("  [green]✓[/green] Conexion SMTP verificada")
-                cfg["smtp_email"] = email
-                cfg["smtp_password"] = pwd
-                break
-            except Exception as e:
-                console.print(f"  [red]✗[/red] Error: {e}")
-                console.print("  [yellow]  Verifica el App Password e intenta de nuevo.[/yellow]")
+    def step_gemini():
+        _setup_screen(3, TOTAL, "Gemini AI", "Obtiene la clave gratis en https://aistudio.google.com/apikey")
+        while True:
+            key = _ask("  Clave API", default=cfg.get("gemini_api_key", ""))
+            if key is None: return "back"
+            if not key: console.print("  [red]Obligatoria.[/red]"); continue
+            key = key.replace(" ", "")
+            with console.status("  [dim]Verificando...[/dim]"):
+                try:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
+                    requests.post(url, json={"contents":[{"parts":[{"text":"test"}]}]}, timeout=10).raise_for_status()
+                    cfg["gemini_api_key"] = key
+                    console.print("  [green]>[/green] Clave valida")
+                    break
+                except:
+                    console.print("  [red]![/red] Clave invalida. Intenta de nuevo.")
+        # Model selection inline
+        console.print()
+        current = cfg.get("gemini_model", "gemini-2.5-flash")
+        console.print(f"  [bold]Modelo[/bold] [dim](Enter para mantener {current})[/dim]")
+        for i, m in enumerate(GEMINI_MODELS, 1):
+            marker = " [green]<< actual[/green]" if m == current else ""
+            console.print(f"  [cyan]{i}.[/cyan] {m}{marker}")
+        choice = _ask("  Selecciona", default=str(GEMINI_MODELS.index(current) + 1 if current in GEMINI_MODELS else 1))
+        if choice is None: return "back"
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(GEMINI_MODELS): cfg["gemini_model"] = GEMINI_MODELS[idx]
+        except ValueError: pass
 
-    # 3. CV
-    _step_header(3, total_steps, "Tu CV actual", "Ruta al archivo PDF de tu CV")
-    profile = cfg.get("profile", {})
-    while True:
-        cv = Prompt.ask("  Ruta del CV (.pdf)", default=cfg.get("cv_path", ""))
-        if not cv:
-            console.print("  [yellow]![/yellow] Sin CV. Puedes agregarlo despues con 'jobhunter setup'")
-            break
-        if not os.path.exists(cv):
-            console.print(f"  [red]✗[/red] Archivo no encontrado: {cv}")
-            continue
-        cfg["cv_path"] = cv
-        with console.status("  [dim]Leyendo CV con Gemini AI...[/dim]"):
-            try:
-                with open(cv, "rb") as f:
-                    b64 = base64.b64encode(f.read()).decode()
-                result = call_gemini_vision(cfg, """Lee este CV/resume y extrae TODA la informacion en JSON.
+    def step_gmail():
+        _setup_screen(5, TOTAL, "Gmail + Contrasena de aplicacion", "Cuenta Google > Seguridad > Contrasenas de aplicacion")
+        while True:
+            email = _ask("  Gmail", default=cfg.get("smtp_email", ""))
+            if email is None: return "back"
+            if not re.match(r'^[^@]+@gmail\.com$', email):
+                console.print("  [red]![/red] Debe ser @gmail.com"); continue
+            pwd = Prompt.ask("  Contrasena de app", default=cfg.get("smtp_password",""), password=True)
+            pwd = pwd.strip().replace(" ", "")
+            if pwd == BACK: return "back"
+            if not pwd or len(pwd) < 10:
+                console.print("  [red]![/red] Minimo 16 caracteres"); continue
+            with console.status("  [dim]Verificando SMTP...[/dim]"):
+                try:
+                    with smtplib.SMTP("smtp.gmail.com", 587) as s:
+                        s.starttls(); s.login(email, pwd)
+                    cfg["smtp_email"] = email; cfg["smtp_password"] = pwd
+                    console.print("  [green]>[/green] SMTP verificado")
+                    return
+                except Exception as e:
+                    console.print(f"  [red]![/red] {e}")
+
+    def step_cv():
+        _setup_screen(4, TOTAL, "Tu CV actual", "Ruta al archivo PDF")
+        while True:
+            cv = _ask("  Ruta del CV (.pdf)", default=cfg.get("cv_path", ""))
+            if cv is None: return "back"
+            if not cv: return
+            if not os.path.exists(cv):
+                console.print(f"  [red]![/red] No encontrado: {cv}"); continue
+            cfg["cv_path"] = cv
+            with console.status("  [dim]Leyendo CV con Gemini AI...[/dim]"):
+                try:
+                    with open(cv, "rb") as f:
+                        b64 = base64.b64encode(f.read()).decode()
+                    result = call_gemini_vision(cfg, """Lee este CV/resume y extrae TODA la informacion en JSON.
 Adapta las categorias de skills al perfil real de la persona (no asumas que es tech).
 {"name":"","title":"titulo profesional","email":"","phone":"","linkedin":"","portfolio":"","location":"",
 "summary":"resumen profesional completo",
@@ -318,153 +411,124 @@ Adapta las categorias de skills al perfil real de la persona (no asumas que es t
 "education":[{"institution":"","degree":"","period":""}],
 "projects":[{"name":"","description":"","tech":[]}],"achievements":[]}
 SOLO JSON valido.""", b64, "application/pdf")
-                profile = json.loads(result)
-                console.print(f"  [green]✓[/green] CV leido — {profile.get('name', '?')}")
-                skills_preview = ', '.join(list(profile.get('skills',{}).values())[0][:5]) if profile.get('skills') else '-'
-                console.print(f"    [dim]{skills_preview}...[/dim]")
-                break
-            except Exception as e:
-                console.print(f"  [red]✗[/red] Error leyendo CV: {e}")
-                console.print("  [yellow]  Puedes continuar sin CV automatico.[/yellow]")
-                break
+                    nonlocal profile
+                    profile = json.loads(result)
+                    console.print(f"  [green]>[/green] CV leido — {profile.get('name', '?')}")
+                    return
+                except Exception as e:
+                    console.print(f"  [red]![/red] Error: {e}")
+                    return
 
-    # 4. Portfolio
-    _step_header(4, total_steps, "Portfolio / Web personal", "Opcional")
-    portfolio = Prompt.ask("  URL", default=profile.get("portfolio", ""))
-    profile["portfolio"] = portfolio
+    def step_linkedin_login():
+        _setup_screen(6, TOTAL, "Login en LinkedIn", "Se abrira Chrome para iniciar sesion")
+        if os.path.exists(SESSION_DIR):
+            console.print("  [green]>[/green] Sesion existente detectada")
+            skip = _ask("  Saltar login? (s/n)", default="s")
+            if skip is None: return "back"
+            if skip.lower() in ("s", "si", "y", "yes"):
+                return
+        _do_linkedin_login()
 
-    # 5. LinkedIn
-    _step_header(5, total_steps, "Perfil de LinkedIn")
-    linkedin = Prompt.ask("  URL", default=profile.get("linkedin", ""))
-    if linkedin and "linkedin.com" not in linkedin:
-        console.print("  [yellow]![/yellow] Eso no parece un URL de LinkedIn")
-    profile["linkedin"] = linkedin
+    # ── State machine (ordered easy → hard) ──
+    steps = [step_links, step_job_types, step_preferences,
+             step_gemini, step_cv, step_gmail, step_linkedin_login]
+    idx = 0
+    while idx < len(steps):
+        result = steps[idx]()
+        if result == "back":
+            idx = max(0, idx - 1)
+        else:
+            idx += 1
 
+    # Save profile + generate queries with AI
     cfg["profile"] = profile
-
-    # 6. Idiomas de busqueda
-    _step_header(6, total_steps, "En que idiomas buscar ofertas?", "Las ofertas y CVs se generaran en el idioma de cada oferta")
-    lang_options = {"1": "Espanol", "2": "Ingles", "3": "Espanol e Ingles"}
-    for k, v in lang_options.items():
-        console.print(f"  [cyan]{k}.[/cyan] {v}")
-    lang_default = cfg.get("search_languages", "3")
-    lang_choice = Prompt.ask("  Selecciona", default=lang_default)
-    if lang_choice not in lang_options:
-        lang_choice = "3"
-    cfg["search_languages"] = lang_choice
-    console.print(f"  [green]✓[/green] {lang_options[lang_choice]}")
-
-    # 7. Modalidad de trabajo
-    _step_header(7, total_steps, "Que modalidad de trabajo buscas?")
-    mode_options = {"1": "Remoto", "2": "Hibrido", "3": "Presencial", "4": "Cualquiera"}
-    for k, v in mode_options.items():
-        console.print(f"  [cyan]{k}.[/cyan] {v}")
-    mode_default = cfg.get("work_mode", "4")
-    mode_choice = Prompt.ask("  Selecciona", default=mode_default)
-    if mode_choice not in mode_options:
-        mode_choice = "4"
-    cfg["work_mode"] = mode_choice
-    cfg["work_mode_label"] = mode_options[mode_choice]
-    console.print(f"  [green]✓[/green] {mode_options[mode_choice]}")
-
-    # 7b. Ubicacion (si hibrido o presencial)
-    if mode_choice in ("2", "3"):
-        console.print()
-        console.print(f"  [bold]Tu ubicacion[/bold]")
-        console.print("  [dim]Ciudad y pais para filtrar ofertas cercanas[/dim]")
-        location = Prompt.ask("  Ubicacion", default=cfg.get("user_location", profile.get("location", "")))
-        cfg["user_location"] = location
-    else:
-        cfg["user_location"] = cfg.get("user_location", "")
-
-    # 8. Preferencias de empleo
-    _step_header(8, total_steps, "Que tipo de empleo buscas?")
-
-    if profile.get("skills"):
-        with console.status("  [dim]Generando sugerencias de tu CV...[/dim]"):
-            try:
-                s = json.dumps(profile.get("skills",{}))
-                e = json.dumps(profile.get("experience",[])[:3])
-                result = call_gemini(cfg, f"Basado en skills: {s} y experiencia: {e}, sugiere 6 tipos de empleo. JSON array: [\"tipo1\",\"tipo2\"]")
-                suggestions = json.loads(result)
-                console.print("  [dim]Sugerencias basadas en tu CV:[/dim]")
-                for i, sg in enumerate(suggestions, 1):
-                    console.print(f"  [cyan]{i}.[/cyan] {sg}")
-                console.print()
-            except:
-                pass
-
-    console.print("  [dim]Escribe los tipos de empleo separados por coma[/dim]")
-    job_types = Prompt.ask("  Tipos de empleo", default=cfg.get("job_types_raw", ""))
-    if not job_types:
-        console.print("  [red]✗[/red] Debes especificar al menos un tipo de empleo.")
-        job_types = Prompt.ask("  Tipos de empleo", default="backend developer")
-    cfg["job_types_raw"] = job_types
-
-    # Generar queries segun idioma y modalidad
     lang = cfg.get("search_languages", "3")
-    work_mode = mode_options.get(mode_choice, "Cualquiera").lower()
-    mode_terms_es = {"remoto": "remoto", "hibrido": "hibrido", "presencial": "presencial", "cualquiera": ""}
-    mode_terms_en = {"remoto": "remote", "hibrido": "hybrid", "presencial": "onsite", "cualquiera": ""}
-    mode_es = mode_terms_es.get(work_mode, "")
-    mode_en = mode_terms_en.get(work_mode, "")
+    lang_label = {"1": "espanol", "2": "ingles", "3": "espanol e ingles"}.get(lang, "espanol e ingles")
+    wm_label = cfg.get("work_mode_label", "Cualquiera")
+    job_types = cfg.get("job_types_raw", "software developer")
+    location = cfg.get("user_location", "")
 
     queries = []
-    for jt in [j.strip() for j in job_types.split(",") if j.strip()]:
-        if lang in ("1", "3"):  # Espanol
-            queries.extend([
-                f"enviar CV {jt} {mode_es}".strip(),
-                f"busco {jt} {mode_es}".strip(),
-                f"contratando {jt} {mode_es}".strip(),
-                f"vacante {jt} {mode_es}".strip(),
-            ])
-        if lang in ("2", "3"):  # Ingles
-            queries.extend([
-                f"hiring {jt} {mode_en}".strip(),
-                f"looking for {jt} {mode_en}".strip(),
-                f"send CV {jt} {mode_en}".strip(),
-                f"job opening {jt} {mode_en}".strip(),
-            ])
+    with console.status("  [dim]Generando queries de busqueda con IA...[/dim]"):
+        try:
+            prompt = f"""Eres un experto en reclutamiento y busqueda de empleo en LinkedIn.
+Tu trabajo es generar queries de busqueda que encuentren PUBLICACIONES de reclutadores que estan buscando candidatos activamente en LinkedIn.
+
+IMPORTANTE: Estas queries se usan en la barra de busqueda de LinkedIn, seccion "Contenido" (posts), NO en la seccion de empleos.
+Deben encontrar posts donde reclutadores publican ofertas con email de contacto para recibir CVs.
+
+PERFIL DEL CANDIDATO:
+- Busca empleo como: {job_types}
+- Modalidad: {wm_label}
+{f'- Ubicacion: {location}' if location else ''}
+- Idiomas de busqueda: {lang_label}
+
+REGLAS:
+- Genera EXACTAMENTE 20 queries variadas
+- Usa terminos que los reclutadores REALMENTE usan al publicar en LinkedIn (no terminos de buscador de empleo)
+- Incluye variaciones: "enviar CV", "buscamos", "contratando", "vacante", "hiring", "looking for", "send resume", "we are hiring", "join our team"
+- Mezcla el titulo exacto con variaciones del sector (ej: si busca "Backend Developer", incluir "desarrollador backend", "backend engineer", "ingeniero backend")
+- Si idioma es espanol: queries en espanol
+- Si idioma es ingles: queries en ingles
+- Si es ambos: mezcla queries en ambos idiomas
+- Si modalidad no es "Cualquiera", incluirla en algunas queries pero no en todas
+- Queries cortas (3-6 palabras), como alguien escribiria en la barra de busqueda
+- NO repitas queries similares con solo cambio de orden de palabras
+
+JSON array: ["query1", "query2", ...]
+SOLO el JSON array, nada mas."""
+            result = call_gemini(cfg, prompt)
+            queries = json.loads(result)
+            if not isinstance(queries, list) or len(queries) < 5:
+                raise ValueError("Pocas queries generadas")
+        except Exception:
+            pass
+
+    # Fallback: templates basicos si la IA falla
+    if not queries:
+        wm = wm_label.lower()
+        mode_terms_es = {"remoto": "remoto", "hibrido": "hibrido", "presencial": "presencial", "cualquiera": ""}
+        mode_terms_en = {"remoto": "remote", "hibrido": "hybrid", "presencial": "onsite", "cualquiera": ""}
+        for jt in [j.strip() for j in job_types.split(",") if j.strip()]:
+            if lang in ("1", "3"):
+                queries.extend([f"enviar CV {jt} {mode_terms_es.get(wm,'')}".strip(), f"busco {jt} {mode_terms_es.get(wm,'')}".strip(),
+                                f"contratando {jt} {mode_terms_es.get(wm,'')}".strip(), f"vacante {jt} {mode_terms_es.get(wm,'')}".strip()])
+            if lang in ("2", "3"):
+                queries.extend([f"hiring {jt} {mode_terms_en.get(wm,'')}".strip(), f"looking for {jt} {mode_terms_en.get(wm,'')}".strip(),
+                                f"send CV {jt} {mode_terms_en.get(wm,'')}".strip(), f"job opening {jt} {mode_terms_en.get(wm,'')}".strip()])
+
     cfg["search_queries"] = queries
     save_config(cfg)
 
-    console.print()
+    # Summary
+    if console.is_terminal: console.clear()
+    console.print(get_banner())
     console.print(Panel(
-        f"[bold green]✓ Configuracion completa[/bold green]\n\n"
+        f"[bold green]> Configuracion completa[/bold green]\n\n"
         f"  [dim]Nombre[/dim]      {profile.get('name', '?')}\n"
-        f"  [dim]Correo[/dim]      {cfg['smtp_email']}\n"
-        f"  [dim]CV[/dim]          {cfg.get('cv_path', 'no configurado')}\n"
-        f"  [dim]Portfolio[/dim]   {profile.get('portfolio', '-') or '-'}\n"
-        f"  [dim]LinkedIn[/dim]    {profile.get('linkedin', '-') or '-'}\n"
-        f"  [dim]Idiomas[/dim]     {lang_options[lang_choice]}\n"
-        f"  [dim]Modalidad[/dim]   {mode_options[mode_choice]}\n"
-        f"  [dim]Ubicacion[/dim]   {cfg.get('user_location', '-') or '-'}\n"
+        f"  [dim]Correo[/dim]      {cfg.get('smtp_email', '?')}\n"
+        f"  [dim]CV[/dim]          {cfg.get('cv_path', '-')}\n"
+        f"  [dim]Modelo[/dim]      {cfg.get('gemini_model', '?')}\n"
+        f"  [dim]Plantilla[/dim]   {cfg.get('cv_template', 'modern')}\n"
         f"  [dim]Busquedas[/dim]   {len(queries)} generadas\n\n"
-        f"  Siguiente paso: [cyan]jobhunter login[/cyan]",
-        border_style="green", title="[bold]Resumen[/bold]", subtitle="[dim]JobHunter AI[/dim]"
+        f"  Siguiente paso: [cyan]jobhunter run[/cyan]",
+        border_style="green", title="[bold]Resumen[/bold]"
     ))
 
 
 # ══════════════════════════════════════════════
 # LOGIN
 # ══════════════════════════════════════════════
-def cmd_login():
-    console.print(get_banner())
+def _do_linkedin_login():
+    """Shared LinkedIn login logic. Returns True if session saved."""
     kill_playwright_zombies()
     os.makedirs(SESSION_DIR, exist_ok=True)
     chrome = find_chrome()
-
-    console.print(Panel(
-        "[bold]Iniciar sesion en LinkedIn[/bold]\n\n"
-        "  1. Se abrira Chrome\n"
-        "  2. Inicia sesion con [bold]correo y contrasena[/bold]\n"
-        "     [red]NO uses el boton de Google[/red] (bloqueado en automatizado)\n"
-        "  3. Cuando estes dentro, [bold]cierra el navegador[/bold]",
-        border_style="cyan", title="[bold]Login[/bold]"
-    ))
-
+    console.print("  1. Se abrira Chrome")
+    console.print("  2. Inicia sesion con [bold]correo y contrasena[/bold]")
+    console.print("     [red]NO uses el boton de Google[/red] (bloqueado en automatizado)")
+    console.print("  3. Cuando estes dentro, [bold]cierra el navegador[/bold]")
     input("\n  Presiona Enter para abrir el navegador...")
-
     with sync_playwright() as p:
         browser = p.chromium.launch_persistent_context(
             user_data_dir=SESSION_DIR, headless=False,
@@ -479,9 +543,14 @@ def cmd_login():
                 try: _ = page.title()
                 except: break
         except: pass
+    console.print("  [green]>[/green] Sesion de LinkedIn guardada")
+    return True
 
+
+def cmd_login():
+    console.print(get_banner())
     console.print()
-    console.print("  [green]✓[/green] Sesion de LinkedIn guardada")
+    _do_linkedin_login()
     console.print()
     console.print("  [bold]Siguiente paso:[/bold]")
     console.print(f"  [cyan]jobhunter --test tu@email.com[/cyan]  prueba")
@@ -593,17 +662,46 @@ def scrape_posts(page, query, max_scroll=4, time_filter="24h"):
         page.goto(f"https://www.linkedin.com/search/results/content/?keywords={encoded}&datePosted=%5B%22{date_param}%22%5D&sortBy=%5B%22date_posted%22%5D", wait_until="domcontentloaded", timeout=60000)
     except Exception:
         return []  # Si timeout, saltar esta query y continuar con la siguiente
-    page.wait_for_timeout(5000)
+    page.wait_for_timeout(random.randint(4000, 6000))
     for _ in range(max_scroll):
-        page.evaluate("window.scrollBy(0, 800)")
-        page.wait_for_timeout(2000)
+        page.evaluate(f"window.scrollBy(0, {random.randint(500, 1100)})")
+        page.wait_for_timeout(random.randint(1500, 3500))
 
     page.evaluate("""() => {
         document.querySelectorAll('button[data-testid="expandable-text-button"]').forEach(b => { try{b.click()}catch(e){} });
     }""")
-    page.wait_for_timeout(2000)
+    page.wait_for_timeout(random.randint(1500, 3000))
 
-    return page.evaluate(r"""() => {
+    # Extract post URLs via 3-dot menu (contains activity URN in "Report" link)
+    post_urls = {}
+    try:
+        listitems = page.locator('[role="listitem"]')
+        for i in range(listitems.count()):
+            try:
+                menu_btn = listitems.nth(i).locator('button[aria-label*="controles"]').first
+                if not menu_btn.is_visible(timeout=500):
+                    continue
+                menu_btn.click()
+                page.wait_for_timeout(random.randint(400, 900))
+                activity_id = page.evaluate(r"""() => {
+                    const links = document.querySelectorAll('a[href*="entityUrn"]');
+                    for (const l of links) {
+                        const m = (l.getAttribute('href') || '').match(/activity%3A(\d+)/);
+                        if (m) return m[1];
+                    }
+                    return null;
+                }""")
+                if activity_id:
+                    post_urls[i] = f"https://www.linkedin.com/feed/update/urn:li:activity:{activity_id}"
+                page.keyboard.press("Escape")
+                page.wait_for_timeout(random.randint(200, 500))
+            except Exception:
+                try: page.keyboard.press("Escape")
+                except: pass
+    except Exception:
+        pass
+
+    posts = page.evaluate(r"""() => {
         const boxes = document.querySelectorAll('span[data-testid="expandable-text-box"]');
         const posts = []; const seen = new Set();
         boxes.forEach((box, idx) => {
@@ -617,6 +715,12 @@ def scrape_posts(page, query, max_scroll=4, time_filter="24h"):
         });
         return posts;
     }""")
+
+    # Attach URLs to posts by matching index
+    for post in posts:
+        post["post_url"] = post_urls.get(post["index"])
+
+    return posts
 
 
 # ══════════════════════════════════════════════
@@ -641,6 +745,8 @@ def agent_filter(cfg, text, ss=None):
     profile_skills = profile.get("skills", {})
     work_mode_label = cfg.get("work_mode_label", "Cualquiera")
     user_location = cfg.get("user_location", "")
+    user_languages = cfg.get("user_languages", [])
+    user_langs_str = ", ".join(lang["language"] + " (" + lang["level"] + ")" for lang in user_languages) if user_languages else "No especificados"
 
     work_mode_rule = ""
     if work_mode_label.lower() == "remoto":
@@ -657,6 +763,7 @@ PERFIL DEL CANDIDATO:
 - Busca empleo como: {job_types}
 - Modalidad preferida: {work_mode_label}
 {f'- Ubicacion del candidato: {user_location}' if user_location else ''}
+- Idiomas del candidato: {user_langs_str}
 - Resumen: {profile_summary[:300]}
 - Habilidades: {json.dumps(profile_skills) if isinstance(profile_skills, dict) else str(profile_skills)[:500]}
 
@@ -669,6 +776,7 @@ REGLAS DE FILTRADO:
 - Solo ofertas de TRABAJO reales (no cursos, certificaciones, logros personales, contenido general, publicidad)
 - Relevante si el puesto tiene relacion con lo que busca el candidato: {job_types}
 {work_mode_rule}
+- Si la oferta REQUIERE un idioma con nivel avanzado o fluido que el candidato NO tiene a ese nivel, marcar is_relevant=false. Los idiomas del candidato son: {user_langs_str}
 - Extraer SIEMPRE el email si existe en el texto
 - Extraer empresa, titulo, descripcion COMPLETA con todos los detalles
 - Extraer requisitos especificos (habilidades, herramientas, anos de experiencia, idiomas, etc.)
@@ -705,9 +813,11 @@ def agent_cv(cfg, job):
 
     lang_names = {"es": "ESPAÑOL", "en": "INGLES", "pt": "PORTUGUES", "fr": "FRANCES", "de": "ALEMAN"}
     lang_name = lang_names.get(lang, "ESPAÑOL")
+    cv_user_langs = cfg.get("user_languages", [])
+    cv_user_langs_str = ", ".join(ul["language"] + " (" + ul["level"] + ")" for ul in cv_user_langs) if cv_user_langs else "No especificados"
 
-    prompt = f"""ROLE: Eres un agente experto en redaccion de CVs profesionales.
-Tu trabajo es tomar el perfil del candidato y REESCRIBIRLO para que encaje perfectamente con una oferta especifica.
+    prompt = f"""ROLE: Eres un reclutador senior que ha revisado mas de 100,000 hojas de vida. Sabes exactamente que busca un hiring manager cuando lee un CV: relevancia inmediata, logros con numeros, y lenguaje que coincida con la oferta.
+Tu trabajo es tomar el perfil del candidato y REESCRIBIRLO desde la perspectiva de lo que el hiring manager de ESTA oferta quiere leer. No es solo hacer match de keywords — es presentar la experiencia del candidato en el orden y con el enfoque que haria que un reclutador diga "este es el candidato".
 Esto funciona para CUALQUIER tipo de trabajo: tecnologia, marketing, ventas, diseno, administracion, salud, educacion, etc.
 
 REGLAS CRITICAS:
@@ -716,6 +826,8 @@ REGLAS CRITICAS:
 - Usa la MISMA TERMINOLOGIA de la oferta. Si la oferta dice "Community Manager", el CV dice "Community Manager". Si dice "Backend Developer", dice "Backend Developer".
 - NO traduzcas terminos que en la industria se usan en su idioma original
 - Adapta TODO el CV al sector y lenguaje de la oferta
+- PROHIBIDO INVENTAR. No agregues habilidades, tecnologias, idiomas, certificaciones, logros o experiencias que NO esten en el perfil del candidato. Solo puedes REORDENAR, REFORMULAR y DESTACAR lo que YA existe. Si la oferta pide algo que el candidato no tiene, simplemente no lo menciones.
+- IDIOMAS: Solo incluye los idiomas que el candidato realmente maneja. Los idiomas del candidato son: {cv_user_langs_str}. NO inventes niveles de idioma ni agregues idiomas que no esten en esta lista.
 
 CANDIDATO:
 {json.dumps(p, indent=2)}
@@ -734,11 +846,11 @@ INSTRUCCIONES PARA CADA SECCION:
 
 3. SKILLS: Reordena poniendo PRIMERO las que pide la oferta. Solo incluye skills relevantes para ESTE puesto.
 
-4. EXPERIENCE: Esta es la parte MAS IMPORTANTE.
+4. EXPERIENCE: Esta es la parte MAS IMPORTANTE. Piensa como el hiring manager que lee esto: que le haria detenerse y decir "este candidato sabe hacer lo que necesito"?
    - Para CADA experiencia laboral, reescribe los bullets para que DESTAQUEN habilidades relevantes a ESTA oferta.
-   - Conecta lo que el candidato hizo con lo que la oferta necesita.
+   - Conecta lo que el candidato hizo con lo que la oferta necesita usando el MISMO lenguaje de la descripcion del puesto.
    - Usa numeros y metricas siempre que sea posible.
-   - Cada bullet debe sonar como si el candidato hizo exactamente lo que esta oferta necesita.
+   - Prioriza los bullets que resuelven los problemas que la oferta menciona, no solo los mas impresionantes.
 
 5. PROJECTS: Selecciona solo los proyectos mas relevantes para esta oferta. Si no hay proyectos relevantes, omite esta seccion con un array vacio.
 
@@ -766,6 +878,9 @@ JSON:
     ],
     "education": [
         {{"institution": "institucion", "degree": "titulo", "period": "periodo"}}
+    ],
+    "languages": [
+        {{"language": "idioma", "level": "nivel real del candidato"}}
     ]
 }}
 SOLO JSON valido."""
@@ -774,11 +889,20 @@ SOLO JSON valido."""
 
 
 # ── AGENT 3: EMAIL WRITER (genera emails de aplicacion) ──
-def agent_email(cfg, job):
+def agent_email(cfg, job, cv_data=None):
     """Agent specialized in writing personalized application emails."""
     p = cfg["profile"]
-    portfolio_line = f"\n- Portfolio: {p['portfolio']}" if p.get('portfolio') else ""
-    linkedin_line = f"\n- LinkedIn: {p['linkedin']}" if p.get('linkedin') else ""
+    portfolio_line = "\n- Portfolio: " + p["portfolio"] if p.get("portfolio") else ""
+    linkedin_line = "\n- LinkedIn: " + p["linkedin"] if p.get("linkedin") else ""
+    cv_context = ""
+    if cv_data:
+        cv_skills = ", ".join(cv_data.get("skills_highlighted", [])[:8])
+        cv_context = (
+            "\nCV GENERADO PARA ESTA OFERTA (usa estos datos para que el email sea coherente con el CV adjunto):"
+            "\n- Titulo: " + cv_data.get("title", "") +
+            "\n- Resumen: " + cv_data.get("summary", "") +
+            "\n- Skills destacadas: " + cv_skills + "\n"
+        )
     lang = job.get("language", "es")
 
     lang_names = {"es": "ESPAÑOL", "en": "INGLES", "pt": "PORTUGUES", "fr": "FRANCES", "de": "ALEMAN"}
@@ -805,7 +929,7 @@ IDIOMA: Escribe TODO el email en {lang_name}. La oferta esta en {lang_name}.
 CANDIDATO:
 - Nombre: {p.get('name', '')}{portfolio_line}{linkedin_line}
 - Busca empleo como: {cfg.get('job_types_raw', '')}
-
+{cv_context}
 OFERTA:
 - Puesto: {job.get('job_title', '')}
 - Empresa: {job.get('company', '')}
@@ -820,7 +944,7 @@ REGLAS ESTRICTAS:
 5. Debe sonar como si {p.get('name', 'el candidato')} lo escribiera personalmente
 6. PROHIBIDO frases de plantilla: "me emociona", "me apasiona profundamente", "me encantaria unirme", "I am excited", "I am passionate"
 7. NO propongas agendar llamadas ni reuniones
-8. Menciona 1-2 logros CONCRETOS con numeros que sean relevantes para ESTA oferta
+8. Menciona 1-2 logros CONCRETOS con numeros que sean relevantes para ESTA oferta. PROHIBIDO inventar logros, cifras o habilidades que no esten en el perfil del candidato{' o en el CV generado' if cv_data else ''}.
 9. El asunto debe ser corto y directo (max 8 palabras)
 10. Firma simple en texto plano: {', '.join(sig_parts)}
 
@@ -833,7 +957,14 @@ JSON (sin markdown, sin bloques de codigo):
 # ══════════════════════════════════════════════
 # RUN
 # ══════════════════════════════════════════════
-def cmd_run(test_email=None, time_filter="24h", auto_apply=False, dry_run=False):
+def cmd_run(
+    test_email=None,
+    time_filter="24h",
+    auto_apply=False,
+    dry_run=False,
+    export_fmt=None,
+    export_path=None,
+):
     cfg = load_config()
     kb = load_kb()
 
@@ -862,58 +993,65 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, dry_run=False)
     queries = cfg.get("search_queries", ["enviar CV backend developer"])
 
     # ── Phase 1: Scrape ──
-    _phase_header("Fase 1 — Buscando en LinkedIn")
+    console.print()
+    console.print("  [bold dim]Buscando en LinkedIn...[/bold dim]")
     all_posts = []
     seen = set()
 
-    with sync_playwright() as p:
-        chrome = find_chrome()
-        browser = p.chromium.launch_persistent_context(
-            user_data_dir=SESSION_DIR, headless=True,
-            viewport={"width":1300,"height":850}, executable_path=chrome,
-        )
-        page = browser.pages[0] if browser.pages else browser.new_page()
-        page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded")
-        page.wait_for_timeout(4000)
+    try:
+        with sync_playwright() as p:
+            chrome = find_chrome()
+            browser = p.chromium.launch_persistent_context(
+                user_data_dir=SESSION_DIR, headless=True,
+                viewport={"width":1300,"height":850}, executable_path=chrome,
+            )
+            page = browser.pages[0] if browser.pages else browser.new_page()
+            page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded")
+            page.wait_for_timeout(4000)
 
-        if "login" in page.url or "signin" in page.url:
-            console.print("  [red]✗[/red] Sesion expirada. Ejecuta: [cyan]jobhunter login[/cyan]")
-            browser.close(); return
+            if "login" in page.url or "signin" in page.url:
+                console.print("  [red]![/red] Sesion expirada. Ejecuta: [cyan]jobhunter login[/cyan]")
+                browser.close(); return
 
-        total_q = len(queries)
-        total_emails_found = 0
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(bar_width=30),
-            TextColumn("{task.completed}/{task.total}"),
-            TimeElapsedColumn(),
-            console=console,
-        ) as prog:
-            task = prog.add_task("Buscando...", total=total_q)
-            for qi, query in enumerate(queries, 1):
-                prog.update(task, description=f"[dim]{query[:45]}[/dim]")
-                posts = scrape_posts(page, query, time_filter=time_filter)
-                for pi in posts:
-                    key = pi["text"][:150]
-                    if key not in seen:
-                        seen.add(key)
-                        all_posts.append(pi)
-                total_emails_found = sum(len(p.get("emails_found",[])) for p in all_posts)
-                prog.advance(task)
-                time.sleep(3)
+            total_q = len(queries)
+            total_emails_found = 0
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(bar_width=30),
+                TextColumn("{task.completed}/{task.total}"),
+                TimeElapsedColumn(),
+                console=console,
+            ) as prog:
+                task = prog.add_task("Buscando...", total=total_q)
+                for qi, query in enumerate(queries, 1):
+                    prog.update(task, description=f"[dim]{query[:45]}[/dim]")
+                    posts = scrape_posts(page, query, time_filter=time_filter)
+                    for pi in posts:
+                        key = pi["text"][:150]
+                        if key not in seen:
+                            seen.add(key)
+                            all_posts.append(pi)
+                    total_emails_found = sum(len(p.get("emails_found",[])) for p in all_posts)
+                    prog.advance(task)
+                    time.sleep(random.uniform(2, 5))
 
-        # Screenshots (optional, quick)
-        text_boxes = page.query_selector_all('span[data-testid="expandable-text-box"]')
-        for post in all_posts:
-            post["screenshots"] = []
-            try:
-                if post["index"] < len(text_boxes):
-                    ss = text_boxes[post["index"]].screenshot()
-                    post["screenshots"].append(base64.b64encode(ss).decode())
-            except: pass
+            # Screenshots (optional, quick)
+            text_boxes = page.query_selector_all('span[data-testid="expandable-text-box"]')
+            for post in all_posts:
+                post["screenshots"] = []
+                try:
+                    if post["index"] < len(text_boxes):
+                        ss = text_boxes[post["index"]].screenshot()
+                        post["screenshots"].append(base64.b64encode(ss).decode())
+                except: pass
 
-        browser.close()
+            browser.close()
+    except KeyboardInterrupt:
+        console.print("\n  [dim]Cancelado.[/dim]")
+        return
+    except Exception:
+        pass
 
     posts_with_emails = [p for p in all_posts if p.get("emails_found")]
     posts_no_emails = len(all_posts) - len(posts_with_emails)
@@ -926,7 +1064,8 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, dry_run=False)
         return
 
     # ── Phase 2: Analyze (only posts with emails to save tokens) ──
-    _phase_header("Fase 2 — Analizando con Gemini AI")
+    console.print()
+    console.print("  [bold dim]Analizando ofertas...[/bold dim]")
     offers = []
 
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
@@ -941,6 +1080,7 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, dry_run=False)
             if a.get("is_job") and a.get("is_relevant", True):
                 a["job_title"] = a.get("job_title") or "Software Developer"
                 a["company"] = a.get("company") or "Empresa"
+                a["post_url"] = post.get("post_url")
                 offers.append(a)
             prog.advance(task)
             time.sleep(1.5)
@@ -960,16 +1100,24 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, dry_run=False)
     batch_dupes = len(offers_with_email) - len(deduped)
     offers_with_email = deduped
 
+    # Filter blacklisted companies
+    rejected = [r.lower() for r in kb.get("rejected_companies", [])]
+    before_bl = len(offers_with_email)
+    offers_with_email = [o for o in offers_with_email if (o.get("company") or "").lower() not in rejected]
+    blacklisted = before_bl - len(offers_with_email)
+
     console.print(
         f"  [bold]{len(offers)}[/bold] ofertas  ·  "
         f"[green]{len(offers_with_email)}[/green] con email  ·  "
-        f"[dim]{batch_dupes} duplicadas  ·  {len(offers_no_email)} sin email[/dim]"
+        f"[dim]{batch_dupes} duplicadas  ·  {len(offers_no_email)} sin email"
+        f"{f'  ·  {blacklisted} bloqueadas' if blacklisted else ''}[/dim]"
     )
     console.print()
 
     if offers_with_email:
         tw = shutil.get_terminal_size((80, 24)).columns
         wide = tw >= 100
+        extra_wide = tw >= 130
         table = Table(border_style="cyan", title="[bold]Ofertas encontradas[/bold]", expand=False, show_lines=False, padding=(0, 1))
         table.add_column("#", style="dim", width=3, justify="right")
         table.add_column("Puesto", max_width=28 if wide else 20, style="bold")
@@ -978,7 +1126,10 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, dry_run=False)
         if wide:
             table.add_column("Ubicacion", max_width=18, style="dim")
             table.add_column("Lang", width=4, style="dim")
+        if extra_wide:
+            table.add_column("Salario", max_width=18, style="green")
         table.add_column("Email", max_width=26 if wide else 22, style="cyan")
+        table.add_column("Post", width=6, justify="center")
         mode_icons = {"remote": "[green]Remoto[/green]", "hybrid": "[yellow]Hibrido[/yellow]", "onsite": "[red]Onsite[/red]", "unknown": "[dim]—[/dim]"}
         for i, o in enumerate(offers_with_email, 1):
             wm = mode_icons.get(o.get("work_mode", "unknown"), "[dim]—[/dim]")
@@ -986,10 +1137,16 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, dry_run=False)
             if loc.lower() in ("null", "none", "n/a", "no especificado", "no mencionado"):
                 loc = "—"
             la = (o.get("language", "?"))[:4].upper()
-            if wide:
-                table.add_row(str(i), o["job_title"][:28], o["company"][:16], wm, loc[:18], la, o["contact_email"])
+            salary = o.get("salary") or "—"
+            if str(salary).lower() in ("null", "none", "n/a", "no mencionado", "no especificado"):
+                salary = "—"
+            post_link = f"[link={o['post_url']}]Ver[/link]" if o.get("post_url") else "[dim]—[/dim]"
+            if extra_wide:
+                table.add_row(str(i), o["job_title"][:28], o["company"][:16], wm, loc[:18], la, str(salary)[:18], o["contact_email"], post_link)
+            elif wide:
+                table.add_row(str(i), o["job_title"][:28], o["company"][:16], wm, loc[:18], la, o["contact_email"], post_link)
             else:
-                table.add_row(str(i), o["job_title"][:20], o["company"][:12], wm, o["contact_email"])
+                table.add_row(str(i), o["job_title"][:20], o["company"][:12], wm, o["contact_email"], post_link)
         console.print(table)
 
     if not offers_with_email:
@@ -1009,6 +1166,23 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, dry_run=False)
     if not offers_with_email:
         console.print("  [yellow]![/yellow] Todas las ofertas ya fueron enviadas anteriormente.")
         return
+
+    # Export offers if requested
+    if export_fmt and export_path and offers_with_email:
+        os.makedirs(os.path.dirname(os.path.abspath(export_path)) or ".", exist_ok=True)
+        export_fields = ["job_title", "company", "contact_email", "work_mode", "location", "salary", "language", "post_url"]
+        if export_fmt == "csv":
+            import csv
+            with open(export_path, "w", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(f, fieldnames=export_fields, extrasaction="ignore")
+                w.writeheader()
+                w.writerows(offers_with_email)
+            console.print(f"  [green]>[/green] Exportado: {export_path}")
+        elif export_fmt == "json":
+            export_data = [{k: o.get(k) for k in export_fields} for o in offers_with_email]
+            with open(export_path, "w", encoding="utf-8") as f:
+                json.dump(export_data, f, indent=2, ensure_ascii=False)
+            console.print(f"  [green]>[/green] Exportado: {export_path}")
 
     # Use only offers with valid email for Phase 3
     offers = offers_with_email
@@ -1038,12 +1212,14 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, dry_run=False)
                 console.print(f"  [red]✗[/red] Formato invalido. Ej: 1,3,5 o 'all'")
 
     # ── Phase 3: Generate & Send ──
-    phase3_title = (
-        "Fase 3 — Generando CVs (dry-run, sin enviar)"
-        if dry_run
-        else "Fase 3 — Generando CVs y enviando"
-    )
-    _phase_header(phase3_title)
+    if dry_run:
+        console.print()
+        console.print(Rule("Fase 3 — Generando CVs (dry-run, sin enviar)", style="cyan"))
+        console.print()
+    else:
+        console.print()
+        console.print("  [bold dim]Generando y enviando...[/bold dim]")
+        console.print()
     sent = 0
     generated = 0
     errors = 0
@@ -1055,50 +1231,57 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, dry_run=False)
         title = (job.get("job_title") or "Posicion")[:80]
         company = (job.get("company") or "Empresa")[:40]
         rec_email = job.get("contact_email")
-
-        console.print(f"  [bold cyan]{i}[/bold cyan][dim]/{total}[/dim]  [bold]{title}[/bold] [dim]→ {company}[/dim]")
-
-        # Generate CV (with retry)
-        cv_path = None
-        for retry in range(3):
-            with console.status(f"       [dim]Generando CV...{' (reintento)' if retry > 0 else ''}[/dim]"):
-                try:
-                    cv_data = agent_cv(cfg, job)
-                    cv_fn = get_cv_filename(company, title)
-                    cv_path = os.path.join(BASE_DIR, "output", "cvs", cv_fn)
-                    os.makedirs(os.path.dirname(cv_path), exist_ok=True)
-                    generate_cv_pdf(cv_data, cfg["profile"], cv_path, title, company, language=job.get("language", "es"))
-                    console.print(f"       [green]✓[/green] CV generado")
-                    break
-                except Exception as e:
-                    if retry == 2:
-                        console.print(f"       [red]✗[/red] CV fallido: {e}")
-                        errors += 1
-                    else:
-                        time.sleep(5)
-        if not cv_path:
-            continue
-        time.sleep(1)
-
-        # Generate email (with retry)
-        edata = None
-        for retry in range(3):
-            with console.status(f"       [dim]Generando email...{' (reintento)' if retry > 0 else ''}[/dim]"):
-                try:
-                    edata = agent_email(cfg, job)
-                    console.print(f"       [green]✓[/green] Email: {edata['subject'][:50]}")
-                    break
-                except Exception as e:
-                    if retry == 2:
-                        console.print(f"       [red]✗[/red] Email fallido: {e}")
-                        errors += 1
-                    else:
-                        time.sleep(5)
-        if not edata:
-            continue
-        time.sleep(1)
-
         to = test_email or rec_email
+        label = f"  [cyan]{i}[/cyan][dim]/{total}[/dim] {title} [dim]→[/dim] {company}"
+
+        cv_path = None
+        edata = None
+        cv_data = None
+        try:
+            with console.status(f"{label}  [dim]CV...[/dim]") as status:
+                for retry in range(3):
+                    try:
+                        cv_data = agent_cv(cfg, job)
+                        cv_fn = get_cv_filename(company, title)
+                        cv_path = os.path.join(BASE_DIR, "output", "cvs", cv_fn)
+                        os.makedirs(os.path.dirname(cv_path), exist_ok=True)
+                        generate_cv_pdf(
+                            cv_data,
+                            cfg["profile"],
+                            cv_path,
+                            title,
+                            company,
+                            language=job.get("language", "es"),
+                            template=cfg.get("cv_template", "modern"),
+                        )
+                        break
+                    except Exception as e:
+                        if retry == 2:
+                            raise
+                        time.sleep(5)
+
+                status.update(f"{label}  [dim]Email...[/dim]")
+                for retry in range(3):
+                    try:
+                        edata = agent_email(cfg, job, cv_data=cv_data)
+                        break
+                    except Exception as e:
+                        if retry == 2:
+                            raise
+                        time.sleep(5)
+        except Exception as e:
+            console.print(f"{label}  [red]! {e}[/red]")
+            errors += 1
+            results.append({
+                "job_title": title,
+                "company": company,
+                "recruiter_email": rec_email,
+                "sent_to": to,
+                "cv_path": cv_path,
+            })
+            time.sleep(2)
+            continue
+
         body = edata["body"]
         if test_email:
             body = f"--- RECLUTADOR: {job.get('contact_name','?')} | EMAIL: {rec_email or '?'} | {company} ---\n\n" + body
@@ -1175,21 +1358,27 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, dry_run=False)
         try:
             send_email(cfg, to, edata["subject"], body, cv_path)
             sent += 1
-            console.print(f"       [green]✓[/green] Enviado → {to}")
+            console.print(f"{label}  [green]> Enviado[/green] [dim]→ {to}[/dim]")
             kb["applications"].append({
-                "date": datetime.now().isoformat(), "job_title": title,
-                "company": company, "recruiter_email": rec_email,
-                "sent_to": to, "mode": mode,
+                "date": datetime.now().isoformat(),
+                "job_title": title,
+                "company": company,
+                "recruiter_email": rec_email,
+                "sent_to": to,
+                "mode": mode,
+                "post_url": job.get("post_url"),
             })
         except Exception as e:
-            console.print(f"       [red]✗[/red] Error envio: {e}")
+            console.print(f"{label}  [red]! {e}[/red]")
             errors += 1
 
         results.append({
-            "job_title": title, "company": company,
-            "recruiter_email": rec_email, "sent_to": to, "cv_path": cv_path,
+            "job_title": title,
+            "company": company,
+            "recruiter_email": rec_email,
+            "sent_to": to,
+            "cv_path": cv_path,
         })
-        console.print()
         time.sleep(2)
 
     run_entry = {
@@ -1246,7 +1435,9 @@ def cmd_optimize(user_prompt=None):
         return
 
     console.print(get_banner())
-    _phase_header("Optimizando queries de busqueda")
+    console.print()
+    console.print("  [bold dim]Optimizando queries de busqueda...[/bold dim]")
+    console.print()
 
     profile = cfg.get("profile", {})
     current_queries = cfg.get("search_queries", [])
@@ -1371,6 +1562,104 @@ JSON (sin markdown, sin bloques de codigo):
 # ══════════════════════════════════════════════
 # HELP
 # ══════════════════════════════════════════════
+def cmd_history(last=10, company_filter=None, since=None, show_all=False):
+    """Show application history from knowledge.json."""
+    kb = load_kb()
+    apps = kb.get("applications", [])
+    if not apps:
+        console.print("  [yellow]![/yellow] No hay aplicaciones registradas.")
+        return
+
+    # Sort by date descending
+    apps = sorted(apps, key=lambda a: a.get("date", ""), reverse=True)
+
+    # Filter by company
+    if company_filter:
+        cf = company_filter.lower()
+        apps = [a for a in apps if cf in (a.get("company") or "").lower()]
+
+    # Filter by date
+    if since:
+        try:
+            cutoff = datetime.fromisoformat(since)
+            apps = [a for a in apps if datetime.fromisoformat(a.get("date", "1970-01-01")) >= cutoff]
+        except ValueError:
+            console.print(f"  [red]![/red] Formato de fecha invalido: {since} (usa YYYY-MM-DD)")
+            return
+
+    # Limit
+    if not show_all:
+        apps = apps[:last]
+
+    if not apps:
+        console.print("  [yellow]![/yellow] No se encontraron aplicaciones con esos filtros.")
+        return
+
+    table = Table(border_style="cyan", padding=(0, 1), expand=False)
+    table.add_column("#", style="dim", width=4)
+    table.add_column("Fecha", style="dim", width=12)
+    table.add_column("Puesto", style="bold", max_width=35)
+    table.add_column("Empresa", max_width=25)
+    table.add_column("Email reclutador", style="dim", max_width=30)
+    table.add_column("Modo", width=6)
+    table.add_column("Post", width=6, justify="center")
+
+    for i, app in enumerate(apps, 1):
+        date_str = app.get("date", "")[:10]
+        mode = app.get("mode", "RUN")
+        mode_style = "[yellow]TEST[/yellow]" if mode == "TEST" else "[green]RUN[/green]"
+        post_link = f"[link={app['post_url']}]Ver[/link]" if app.get("post_url") else "[dim]—[/dim]"
+        table.add_row(
+            str(i),
+            date_str,
+            (app.get("job_title") or "-")[:35],
+            (app.get("company") or "-")[:25],
+            (app.get("recruiter_email") or app.get("sent_to") or "-")[:30],
+            mode_style,
+            post_link,
+        )
+
+    console.print()
+    console.print(Panel(table, border_style="cyan", title=f"[bold]Historial de aplicaciones ({len(apps)})[/bold]"))
+    console.print()
+
+
+def cmd_blacklist(action=None, company=None):
+    """Manage company blacklist."""
+    kb = load_kb()
+    rejected = kb.get("rejected_companies", [])
+
+    if action == "add" and company:
+        norm = company.strip()
+        if norm.lower() in [r.lower() for r in rejected]:
+            console.print(f"  [yellow]![/yellow] '{norm}' ya esta en la blacklist.")
+        else:
+            rejected.append(norm)
+            kb["rejected_companies"] = rejected
+            save_kb(kb)
+            console.print(f"  [green]>[/green] '{norm}' agregada a la blacklist.")
+    elif action == "remove" and company:
+        norm = company.strip().lower()
+        match = [r for r in rejected if r.lower() == norm]
+        if match:
+            rejected.remove(match[0])
+            kb["rejected_companies"] = rejected
+            save_kb(kb)
+            console.print(f"  [green]>[/green] '{match[0]}' removida de la blacklist.")
+        else:
+            console.print(f"  [yellow]![/yellow] '{company}' no esta en la blacklist.")
+    else:
+        # List
+        if not rejected:
+            console.print("  [dim]Blacklist vacia. Usa: jobhunter blacklist add \"Empresa\"[/dim]")
+            return
+        console.print()
+        for i, r in enumerate(rejected, 1):
+            console.print(f"  [cyan]{i}.[/cyan] {r}")
+        console.print(f"\n  [dim]{len(rejected)} empresas bloqueadas[/dim]")
+        console.print()
+
+
 def cmd_help():
     console.print(get_banner())
 
@@ -1384,6 +1673,8 @@ def cmd_help():
     cmds.add_row("jobhunter run", "Buscar y enviar a reclutadores")
     cmds.add_row("jobhunter optimize", "Optimizar queries con IA")
     cmds.add_row("jobhunter optimize \"...\"", "Optimizar con feedback tuyo")
+    cmds.add_row("jobhunter history", "Historial de aplicaciones")
+    cmds.add_row("jobhunter blacklist", "Ver/agregar/quitar empresas bloqueadas")
     cmds.add_row("jobhunter status", "Ver configuracion y estadisticas")
     cmds.add_row("jobhunter update", "Actualizar desde GitHub")
     cmds.add_row("jobhunter help", "Mostrar esta ayuda")
@@ -1398,6 +1689,11 @@ def cmd_help():
     opts.add_row("--time month", "Este mes")
     opts.add_row("--auto", "Aplicar a todas sin preguntar")
     opts.add_row("--dry", "Generar CVs y emails sin enviar [dim](run / --test)[/dim]")
+    opts.add_row("--export csv|json ruta", "Exportar ofertas a archivo [dim](run)[/dim]")
+    opts.add_row("--last N", "Ultimas N aplicaciones [dim](history)[/dim]")
+    opts.add_row("--company \"...\"", "Filtrar por empresa [dim](history)[/dim]")
+    opts.add_row("--since YYYY-MM-DD", "Desde fecha [dim](history)[/dim]")
+    opts.add_row("--all", "Mostrar todas [dim](history)[/dim]")
     console.print(Panel(opts, border_style="dim", title="[bold]Opciones[/bold]"))
 
     # Selection info
@@ -1464,6 +1760,12 @@ def main():
     tf = parse_time_filter(sys.argv)
     auto = "--auto" in sys.argv
     dry = "--dry" in sys.argv
+    export = None
+    export_path = None
+    for i, a in enumerate(sys.argv):
+        if a == "--export" and i + 1 < len(sys.argv) and sys.argv[i + 1] in ("csv", "json"):
+            export = sys.argv[i + 1]
+            export_path = sys.argv[i + 2] if i + 2 < len(sys.argv) and not sys.argv[i + 2].startswith("--") else None
 
     if cmd in ("setup",):
         cmd_setup()
@@ -1472,6 +1774,24 @@ def main():
     elif cmd in ("optimize",):
         user_prompt = sys.argv[2] if len(sys.argv) > 2 and not sys.argv[2].startswith("--") else None
         cmd_optimize(user_prompt)
+    elif cmd in ("history",):
+        last = 10
+        company_filter = None
+        since = None
+        show_all = "--all" in sys.argv
+        for i, a in enumerate(sys.argv):
+            if a == "--last" and i + 1 < len(sys.argv):
+                try: last = int(sys.argv[i + 1])
+                except ValueError: pass
+            elif a == "--company" and i + 1 < len(sys.argv):
+                company_filter = sys.argv[i + 1]
+            elif a == "--since" and i + 1 < len(sys.argv):
+                since = sys.argv[i + 1]
+        cmd_history(last=last, company_filter=company_filter, since=since, show_all=show_all)
+    elif cmd in ("blacklist",):
+        action = sys.argv[2] if len(sys.argv) > 2 else None
+        company = sys.argv[3] if len(sys.argv) > 3 else None
+        cmd_blacklist(action, company)
     elif cmd in ("status",):
         cmd_status()
     elif cmd in ("update",):
@@ -1479,9 +1799,28 @@ def main():
     elif cmd in ("help", "--help", "-h"):
         cmd_help()
     elif cmd == "--test" and len(sys.argv) > 2:
-        cmd_run(test_email=sys.argv[2], time_filter=tf, auto_apply=auto, dry_run=dry)
+        if export and not export_path:
+            console.print("  [red]![/red] --export requiere ruta. Ej: jobhunter --test email --export csv ofertas.csv")
+            return
+        cmd_run(
+            test_email=sys.argv[2],
+            time_filter=tf,
+            auto_apply=auto,
+            dry_run=dry,
+            export_fmt=export,
+            export_path=export_path,
+        )
     elif cmd in ("run",):
-        cmd_run(time_filter=tf, auto_apply=auto, dry_run=dry)
+        if export and not export_path:
+            console.print("  [red]![/red] --export requiere ruta. Ej: jobhunter run --export csv ofertas.csv")
+            return
+        cmd_run(
+            time_filter=tf,
+            auto_apply=auto,
+            dry_run=dry,
+            export_fmt=export,
+            export_path=export_path,
+        )
     else:
         console.print(get_banner())
         console.print(f"  [red]✗[/red] Comando desconocido: [bold]{cmd}[/bold]")

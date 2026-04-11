@@ -963,6 +963,10 @@
 
     <div class="hero-actions">
         <a href="#install" class="btn-primary">Comenzar</a>
+        <a href="guia.html" class="btn-outline">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            Guia para no tecnicos
+        </a>
         <a href="https://github.com/dev-gaspar/jobhunter" class="btn-outline" target="_blank">
             <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
             Ver en GitHub
@@ -1003,24 +1007,21 @@
                 <span class="terminal-title">jobhunter &mdash; bash</span>
             </div>
             <div class="terminal-body" id="terminal-body">
-                <div><span class="cmd">$</span> <span class="ok">jobhunter</span> <span class="flag">run</span></div>
+                <div><span class="cmd">$</span> <span class="ok">jobhunter</span> <span class="flag">run</span> <span class="flag">--time month</span></div>
                 <br>
-                <div class="dim">  Destino: Reclutadores  |  Queries: 20</div>
+                <div class="dim">  Buscando en LinkedIn...</div>
+                <div class="ok">  135 posts  |  90 con email  |  45 sin email (omitidos)</div>
                 <br>
-                <div class="line-phase"><span class="accent">Fase 1</span> &mdash; Buscando en LinkedIn</div>
-                <div class="ok">  115 posts encontrados  |  47 emails extraidos</div>
+                <div class="dim">  Analizando ofertas...</div>
+                <div class="ok">  28 ofertas  |  24 con email  |  3 duplicadas</div>
                 <br>
-                <div class="line-phase"><span class="accent">Fase 2</span> &mdash; Analisis con IA</div>
-                <div class="ok">  30 ofertas relevantes  |  27 con email de reclutador</div>
+                <div class="dim">  Generando y enviando...</div>
                 <br>
-                <div class="line-phase"><span class="accent">Fase 3</span> &mdash; Generando CVs y enviando</div>
-                <div>  <span class="ok">[1/27]</span> AI Engineer SR <span class="dim">en IT Patagonia</span></div>
-                <div>         <span class="warn">CV generado</span> &mdash; Enviado</div>
-                <div>  <span class="ok">[2/27]</span> Full Stack Developer <span class="dim">en NinjaTech</span></div>
-                <div>         <span class="warn">CV generado</span> &mdash; Enviado</div>
-                <div class="dim">  ...</div>
+                <div>  <span class="accent">1</span><span class="dim">/3</span> Senior Engineer <span class="dim">&rarr;</span> Infotree  <span class="ok">&gt; Enviado</span> <span class="dim">&rarr; recruiter@infotree.com</span></div>
+                <div>  <span class="accent">2</span><span class="dim">/3</span> Full Stack Developer <span class="dim">&rarr;</span> Empresa  <span class="ok">&gt; Enviado</span> <span class="dim">&rarr; hr@empresa.com</span></div>
+                <div>  <span class="accent">3</span><span class="dim">/3</span> Backend Engineer <span class="dim">&rarr;</span> Infobase  <span class="ok">&gt; Enviado</span> <span class="dim">&rarr; jobs@infobase.io</span></div>
                 <br>
-                <div class="ok">  27 aplicaciones enviadas exitosamente <span class="terminal-cursor"></span></div>
+                <div class="ok">  3 enviados  |  0 errores <span class="terminal-cursor"></span></div>
             </div>
         </div>
     </div>
@@ -1104,21 +1105,14 @@
                 <div class="step-num">2</div>
                 <div class="step-content">
                     <h3>Configurar</h3>
-                    <p>Sube tu CV, configura tu API key de Gemini (gratis), y define que tipo de empleo buscas.</p>
+                    <p>Wizard interactivo: sube tu CV, configura Gmail, elige plantilla, define idiomas y tipo de empleo, e inicia sesion en LinkedIn. Todo en un solo flujo.</p>
                 </div>
             </div>
             <div class="step" data-step="3">
                 <div class="step-num">3</div>
                 <div class="step-content">
-                    <h3>Login en LinkedIn</h3>
-                    <p>Inicia sesion una vez. La sesion se guarda para futuras ejecuciones.</p>
-                </div>
-            </div>
-            <div class="step" data-step="4">
-                <div class="step-num">4</div>
-                <div class="step-content">
                     <h3>Ejecutar</h3>
-                    <p>El sistema escanea, analiza, genera CVs personalizados, escribe emails, y los envia automaticamente.</p>
+                    <p>El sistema escanea LinkedIn, filtra con IA, genera CVs personalizados, escribe emails, y los envia al reclutador.</p>
                 </div>
             </div>
         </div>
