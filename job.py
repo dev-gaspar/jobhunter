@@ -250,90 +250,8 @@ def cmd_setup():
     TOTAL = 7
     # ── Step functions: return "back" to go back, anything else continues ──
 
-    def step_gemini():
-        _setup_screen(0, TOTAL, "Gemini AI", "Obtiene la clave gratis en https://aistudio.google.com/apikey")
-        while True:
-            key = _ask("  Clave API", default=cfg.get("gemini_api_key", ""))
-            if key is None: return "back"
-            if not key: console.print("  [red]Obligatoria.[/red]"); continue
-            key = key.replace(" ", "")
-            with console.status("  [dim]Verificando...[/dim]"):
-                try:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
-                    requests.post(url, json={"contents":[{"parts":[{"text":"test"}]}]}, timeout=10).raise_for_status()
-                    cfg["gemini_api_key"] = key
-                    console.print("  [green]>[/green] Clave valida")
-                    break
-                except:
-                    console.print("  [red]![/red] Clave invalida. Intenta de nuevo.")
-        # Model selection inline
-        console.print()
-        current = cfg.get("gemini_model", "gemini-2.5-flash")
-        console.print(f"  [bold]Modelo[/bold] [dim](Enter para mantener {current})[/dim]")
-        for i, m in enumerate(GEMINI_MODELS, 1):
-            marker = " [green]<< actual[/green]" if m == current else ""
-            console.print(f"  [cyan]{i}.[/cyan] {m}{marker}")
-        choice = _ask("  Selecciona", default=str(GEMINI_MODELS.index(current) + 1 if current in GEMINI_MODELS else 1))
-        if choice is None: return "back"
-        try:
-            idx = int(choice) - 1
-            if 0 <= idx < len(GEMINI_MODELS): cfg["gemini_model"] = GEMINI_MODELS[idx]
-        except ValueError: pass
-
-    def step_gmail():
-        _setup_screen(1, TOTAL, "Gmail + Contrasena de aplicacion", "Cuenta Google > Seguridad > Contrasenas de aplicacion")
-        while True:
-            email = _ask("  Gmail", default=cfg.get("smtp_email", ""))
-            if email is None: return "back"
-            if not re.match(r'^[^@]+@gmail\.com$', email):
-                console.print("  [red]![/red] Debe ser @gmail.com"); continue
-            pwd = Prompt.ask("  Contrasena de app", default=cfg.get("smtp_password",""), password=True)
-            pwd = pwd.strip().replace(" ", "")
-            if pwd == BACK: return "back"
-            if not pwd or len(pwd) < 10:
-                console.print("  [red]![/red] Minimo 16 caracteres"); continue
-            with console.status("  [dim]Verificando SMTP...[/dim]"):
-                try:
-                    with smtplib.SMTP("smtp.gmail.com", 587) as s:
-                        s.starttls(); s.login(email, pwd)
-                    cfg["smtp_email"] = email; cfg["smtp_password"] = pwd
-                    console.print("  [green]>[/green] SMTP verificado")
-                    return
-                except Exception as e:
-                    console.print(f"  [red]![/red] {e}")
-
-    def step_cv():
-        _setup_screen(2, TOTAL, "Tu CV actual", "Ruta al archivo PDF")
-        while True:
-            cv = _ask("  Ruta del CV (.pdf)", default=cfg.get("cv_path", ""))
-            if cv is None: return "back"
-            if not cv: return
-            if not os.path.exists(cv):
-                console.print(f"  [red]![/red] No encontrado: {cv}"); continue
-            cfg["cv_path"] = cv
-            with console.status("  [dim]Leyendo CV con Gemini AI...[/dim]"):
-                try:
-                    with open(cv, "rb") as f:
-                        b64 = base64.b64encode(f.read()).decode()
-                    result = call_gemini_vision(cfg, """Lee este CV/resume y extrae TODA la informacion en JSON.
-Adapta las categorias de skills al perfil real de la persona (no asumas que es tech).
-{"name":"","title":"titulo profesional","email":"","phone":"","linkedin":"","portfolio":"","location":"",
-"summary":"resumen profesional completo",
-"skills": "objeto con categorias relevantes al perfil, ej: para tech {backend:[],frontend:[]}, para marketing {estrategia:[],herramientas:[]}, para diseno {tools:[],especialidades:[]}, etc.",
-"experience":[{"company":"","role":"","period":"","description":"descripcion completa de logros y responsabilidades"}],
-"education":[{"institution":"","degree":"","period":""}],
-"projects":[{"name":"","description":"","tech":[]}],"achievements":[]}
-SOLO JSON valido.""", b64, "application/pdf")
-                    nonlocal profile
-                    profile = json.loads(result)
-                    console.print(f"  [green]>[/green] CV leido — {profile.get('name', '?')}")
-                    return
-                except Exception as e:
-                    console.print(f"  [red]![/red] Error: {e}")
-                    return
-
     def step_links():
-        _setup_screen(3, TOTAL, "Links profesionales", "Opcional, Enter para saltar")
+        _setup_screen(0, TOTAL, "Links profesionales", "Opcional, Enter para saltar")
         portfolio = _ask("  Portfolio / web personal", default=profile.get("portfolio", ""))
         if portfolio is None: return "back"
         profile["portfolio"] = portfolio
@@ -342,8 +260,26 @@ SOLO JSON valido.""", b64, "application/pdf")
         if linkedin is None: return "back"
         profile["linkedin"] = linkedin
 
+    def step_job_types():
+        _setup_screen(1, TOTAL, "Que tipo de empleo buscas?")
+        if cfg.get("gemini_api_key") and profile.get("skills"):
+            with console.status("  [dim]Generando sugerencias...[/dim]"):
+                try:
+                    s = json.dumps(profile.get("skills",{}))
+                    e = json.dumps(profile.get("experience",[])[:3])
+                    result = call_gemini(cfg, f"Basado en skills: {s} y experiencia: {e}, sugiere 6 tipos de empleo. JSON array: [\"tipo1\",\"tipo2\"]")
+                    for i, sg in enumerate(json.loads(result), 1):
+                        console.print(f"  [cyan]{i}.[/cyan] {sg}")
+                    console.print()
+                except: pass
+        console.print("  [dim]Separados por coma[/dim]")
+        val = _ask("  Tipos de empleo", default=cfg.get("job_types_raw", ""))
+        if val is None: return "back"
+        if not val: val = "software developer"
+        cfg["job_types_raw"] = val
+
     def step_preferences():
-        _setup_screen(4, TOTAL, "Preferencias", "Idiomas, modalidad y plantilla de CV")
+        _setup_screen(2, TOTAL, "Preferencias", "Idiomas, modalidad y plantilla de CV")
         # Search languages
         console.print("  [bold]Idiomas de busqueda[/bold]")
         for k, v in lang_options.items():
@@ -400,23 +336,87 @@ SOLO JSON valido.""", b64, "application/pdf")
             if 0 <= idx < len(tmpl_keys): cfg["cv_template"] = tmpl_keys[idx]
         except ValueError: pass
 
-    def step_job_types():
-        _setup_screen(5, TOTAL, "Que tipo de empleo buscas?")
-        if profile.get("skills"):
-            with console.status("  [dim]Generando sugerencias...[/dim]"):
+    def step_gemini():
+        _setup_screen(3, TOTAL, "Gemini AI", "Obtiene la clave gratis en https://aistudio.google.com/apikey")
+        while True:
+            key = _ask("  Clave API", default=cfg.get("gemini_api_key", ""))
+            if key is None: return "back"
+            if not key: console.print("  [red]Obligatoria.[/red]"); continue
+            key = key.replace(" ", "")
+            with console.status("  [dim]Verificando...[/dim]"):
                 try:
-                    s = json.dumps(profile.get("skills",{}))
-                    e = json.dumps(profile.get("experience",[])[:3])
-                    result = call_gemini(cfg, f"Basado en skills: {s} y experiencia: {e}, sugiere 6 tipos de empleo. JSON array: [\"tipo1\",\"tipo2\"]")
-                    for i, sg in enumerate(json.loads(result), 1):
-                        console.print(f"  [cyan]{i}.[/cyan] {sg}")
-                    console.print()
-                except: pass
-        console.print("  [dim]Separados por coma[/dim]")
-        val = _ask("  Tipos de empleo", default=cfg.get("job_types_raw", ""))
-        if val is None: return "back"
-        if not val: val = "software developer"
-        cfg["job_types_raw"] = val
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
+                    requests.post(url, json={"contents":[{"parts":[{"text":"test"}]}]}, timeout=10).raise_for_status()
+                    cfg["gemini_api_key"] = key
+                    console.print("  [green]>[/green] Clave valida")
+                    break
+                except:
+                    console.print("  [red]![/red] Clave invalida. Intenta de nuevo.")
+        # Model selection inline
+        console.print()
+        current = cfg.get("gemini_model", "gemini-2.5-flash")
+        console.print(f"  [bold]Modelo[/bold] [dim](Enter para mantener {current})[/dim]")
+        for i, m in enumerate(GEMINI_MODELS, 1):
+            marker = " [green]<< actual[/green]" if m == current else ""
+            console.print(f"  [cyan]{i}.[/cyan] {m}{marker}")
+        choice = _ask("  Selecciona", default=str(GEMINI_MODELS.index(current) + 1 if current in GEMINI_MODELS else 1))
+        if choice is None: return "back"
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(GEMINI_MODELS): cfg["gemini_model"] = GEMINI_MODELS[idx]
+        except ValueError: pass
+
+    def step_gmail():
+        _setup_screen(5, TOTAL, "Gmail + Contrasena de aplicacion", "Cuenta Google > Seguridad > Contrasenas de aplicacion")
+        while True:
+            email = _ask("  Gmail", default=cfg.get("smtp_email", ""))
+            if email is None: return "back"
+            if not re.match(r'^[^@]+@gmail\.com$', email):
+                console.print("  [red]![/red] Debe ser @gmail.com"); continue
+            pwd = Prompt.ask("  Contrasena de app", default=cfg.get("smtp_password",""), password=True)
+            pwd = pwd.strip().replace(" ", "")
+            if pwd == BACK: return "back"
+            if not pwd or len(pwd) < 10:
+                console.print("  [red]![/red] Minimo 16 caracteres"); continue
+            with console.status("  [dim]Verificando SMTP...[/dim]"):
+                try:
+                    with smtplib.SMTP("smtp.gmail.com", 587) as s:
+                        s.starttls(); s.login(email, pwd)
+                    cfg["smtp_email"] = email; cfg["smtp_password"] = pwd
+                    console.print("  [green]>[/green] SMTP verificado")
+                    return
+                except Exception as e:
+                    console.print(f"  [red]![/red] {e}")
+
+    def step_cv():
+        _setup_screen(4, TOTAL, "Tu CV actual", "Ruta al archivo PDF")
+        while True:
+            cv = _ask("  Ruta del CV (.pdf)", default=cfg.get("cv_path", ""))
+            if cv is None: return "back"
+            if not cv: return
+            if not os.path.exists(cv):
+                console.print(f"  [red]![/red] No encontrado: {cv}"); continue
+            cfg["cv_path"] = cv
+            with console.status("  [dim]Leyendo CV con Gemini AI...[/dim]"):
+                try:
+                    with open(cv, "rb") as f:
+                        b64 = base64.b64encode(f.read()).decode()
+                    result = call_gemini_vision(cfg, """Lee este CV/resume y extrae TODA la informacion en JSON.
+Adapta las categorias de skills al perfil real de la persona (no asumas que es tech).
+{"name":"","title":"titulo profesional","email":"","phone":"","linkedin":"","portfolio":"","location":"",
+"summary":"resumen profesional completo",
+"skills": "objeto con categorias relevantes al perfil, ej: para tech {backend:[],frontend:[]}, para marketing {estrategia:[],herramientas:[]}, para diseno {tools:[],especialidades:[]}, etc.",
+"experience":[{"company":"","role":"","period":"","description":"descripcion completa de logros y responsabilidades"}],
+"education":[{"institution":"","degree":"","period":""}],
+"projects":[{"name":"","description":"","tech":[]}],"achievements":[]}
+SOLO JSON valido.""", b64, "application/pdf")
+                    nonlocal profile
+                    profile = json.loads(result)
+                    console.print(f"  [green]>[/green] CV leido — {profile.get('name', '?')}")
+                    return
+                except Exception as e:
+                    console.print(f"  [red]![/red] Error: {e}")
+                    return
 
     def step_linkedin_login():
         _setup_screen(6, TOTAL, "Login en LinkedIn", "Se abrira Chrome para iniciar sesion")
@@ -428,9 +428,9 @@ SOLO JSON valido.""", b64, "application/pdf")
                 return
         _do_linkedin_login()
 
-    # ── State machine ──
-    steps = [step_gemini, step_gmail, step_cv, step_links,
-             step_preferences, step_job_types, step_linkedin_login]
+    # ── State machine (ordered easy → hard) ──
+    steps = [step_links, step_job_types, step_preferences,
+             step_gemini, step_cv, step_gmail, step_linkedin_login]
     idx = 0
     while idx < len(steps):
         result = steps[idx]()
