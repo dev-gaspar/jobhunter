@@ -23,8 +23,8 @@ Esto instala el comando `jobhunter` globalmente en tu terminal.
 ## Comandos
 
 ```
-jobhunter setup                          Configuracion inicial
-jobhunter login                          Iniciar sesion en LinkedIn
+jobhunter setup                          Configuracion inicial (incluye login)
+jobhunter login                          Re-login si la sesion expira
 jobhunter --test email@test.com          Prueba (envia a tu correo)
 jobhunter run                            Buscar y enviar a reclutadores
 jobhunter optimize                       Optimizar queries de busqueda con IA
@@ -145,9 +145,8 @@ Se guarda en `knowledge.json` bajo `rejected_companies`.
 
 ## Como funciona (alto nivel)
 
-1. **Setup**: Configuras tu API key de Gemini, eliges el modelo de IA, correo Gmail, subes tu CV, eliges plantilla de CV, idiomas de busqueda, tus idiomas con nivel, modalidad de trabajo, y tipo de empleo
-2. **Login**: Inicias sesion en LinkedIn una vez (la sesion se guarda)
-3. **Busqueda**: El sistema busca publicaciones en LinkedIn con tus terminos, expande el texto de cada post, y extrae emails de reclutadores
+1. **Setup**: Wizard interactivo de 11 pasos con barra de porcentaje y pantalla limpia por paso. Configuras API key, modelo, Gmail, CV, plantilla, idiomas, modalidad, tipo de empleo, y login de LinkedIn. Puedes volver al paso anterior escribiendo `<`.
+2. **Busqueda**: El sistema busca publicaciones en LinkedIn con tus terminos, expande el texto de cada post, y extrae emails de reclutadores
 4. **Analisis**: Un agente de IA analiza cada publicacion para determinar si es una oferta real y relevante para tu perfil
 5. **Seleccion**: Se muestra una tabla con las ofertas encontradas y puedes elegir a cuales aplicar (o usar `--auto` para todas)
 6. **CV personalizado**: Otro agente de IA genera un CV en PDF adaptado a cada oferta especifica, reescribiendo tu experiencia y habilidades para que encajen con lo que piden
