@@ -364,11 +364,6 @@
         <div class="badge">Guia paso a paso</div>
         <h1>Configurar JobHunter AI</h1>
         <p>Todo lo que necesitas para empezar. Sin conocimientos tecnicos.</p>
-        <div class="os-selector">
-            <button class="os-btn" onclick="setOS('windows')">Windows</button>
-            <button class="os-btn" onclick="setOS('mac')">macOS</button>
-            <button class="os-btn" onclick="setOS('linux')">Linux</button>
-        </div>
     </div>
 </header>
 
@@ -394,6 +389,19 @@
         <a href="#faq">Preguntas</a>
     </div>
 </nav>
+
+<!-- OS SELECTOR -->
+<section id="os-select" style="padding: 32px 0; text-align: center;">
+    <div class="container">
+        <h2>Elige tu sistema operativo</h2>
+        <p>La guia se adapta automaticamente para mostrarte solo lo que necesitas.</p>
+        <div class="os-selector">
+            <button class="os-btn" onclick="setOS('windows')">Windows</button>
+            <button class="os-btn" onclick="setOS('mac')">macOS</button>
+            <button class="os-btn" onclick="setOS('linux')">Linux</button>
+        </div>
+    </div>
+</section>
 
 <!-- TERMINAL -->
 <section id="terminal">
@@ -800,16 +808,25 @@ function setOS(os) {
     else setOS('linux');
 })();
 
-// Active nav on scroll
+// Active nav on scroll + auto-scroll nav to active link on mobile
 const sections = document.querySelectorAll('section[id]');
 const navLinks = document.querySelectorAll('nav a');
+const navContainer = document.querySelector('nav .container');
 window.addEventListener('scroll', () => {
     let current = '';
     sections.forEach(s => {
         if (window.scrollY >= s.offsetTop - 100) current = s.id;
     });
     navLinks.forEach(a => {
-        a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+        const isActive = a.getAttribute('href') === '#' + current;
+        a.classList.toggle('active', isActive);
+        if (isActive && navContainer) {
+            const navRect = navContainer.getBoundingClientRect();
+            const linkRect = a.getBoundingClientRect();
+            if (linkRect.left < navRect.left || linkRect.right > navRect.right) {
+                a.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+            }
+        }
     });
 });
 </script>
