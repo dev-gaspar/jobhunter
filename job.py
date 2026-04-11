@@ -447,20 +447,63 @@ SOLO JSON valido.""", b64, "application/pdf")
         else:
             idx += 1
 
-    # Save profile + generate queries
+    # Save profile + generate queries with AI
     cfg["profile"] = profile
     lang = cfg.get("search_languages", "3")
-    wm = mode_options.get(cfg.get("work_mode", "4"), "Cualquiera").lower()
-    mode_terms_es = {"remoto": "remoto", "hibrido": "hibrido", "presencial": "presencial", "cualquiera": ""}
-    mode_terms_en = {"remoto": "remote", "hibrido": "hybrid", "presencial": "onsite", "cualquiera": ""}
+    lang_label = {"1": "espanol", "2": "ingles", "3": "espanol e ingles"}.get(lang, "espanol e ingles")
+    wm_label = cfg.get("work_mode_label", "Cualquiera")
+    job_types = cfg.get("job_types_raw", "software developer")
+    location = cfg.get("user_location", "")
+
     queries = []
-    for jt in [j.strip() for j in cfg.get("job_types_raw", "").split(",") if j.strip()]:
-        if lang in ("1", "3"):
-            queries.extend([f"enviar CV {jt} {mode_terms_es.get(wm,'')}".strip(), f"busco {jt} {mode_terms_es.get(wm,'')}".strip(),
-                            f"contratando {jt} {mode_terms_es.get(wm,'')}".strip(), f"vacante {jt} {mode_terms_es.get(wm,'')}".strip()])
-        if lang in ("2", "3"):
-            queries.extend([f"hiring {jt} {mode_terms_en.get(wm,'')}".strip(), f"looking for {jt} {mode_terms_en.get(wm,'')}".strip(),
-                            f"send CV {jt} {mode_terms_en.get(wm,'')}".strip(), f"job opening {jt} {mode_terms_en.get(wm,'')}".strip()])
+    with console.status("  [dim]Generando queries de busqueda con IA...[/dim]"):
+        try:
+            prompt = f"""Eres un experto en reclutamiento y busqueda de empleo en LinkedIn.
+Tu trabajo es generar queries de busqueda que encuentren PUBLICACIONES de reclutadores que estan buscando candidatos activamente en LinkedIn.
+
+IMPORTANTE: Estas queries se usan en la barra de busqueda de LinkedIn, seccion "Contenido" (posts), NO en la seccion de empleos.
+Deben encontrar posts donde reclutadores publican ofertas con email de contacto para recibir CVs.
+
+PERFIL DEL CANDIDATO:
+- Busca empleo como: {job_types}
+- Modalidad: {wm_label}
+{f'- Ubicacion: {location}' if location else ''}
+- Idiomas de busqueda: {lang_label}
+
+REGLAS:
+- Genera EXACTAMENTE 20 queries variadas
+- Usa terminos que los reclutadores REALMENTE usan al publicar en LinkedIn (no terminos de buscador de empleo)
+- Incluye variaciones: "enviar CV", "buscamos", "contratando", "vacante", "hiring", "looking for", "send resume", "we are hiring", "join our team"
+- Mezcla el titulo exacto con variaciones del sector (ej: si busca "Backend Developer", incluir "desarrollador backend", "backend engineer", "ingeniero backend")
+- Si idioma es espanol: queries en espanol
+- Si idioma es ingles: queries en ingles
+- Si es ambos: mezcla queries en ambos idiomas
+- Si modalidad no es "Cualquiera", incluirla en algunas queries pero no en todas
+- Queries cortas (3-6 palabras), como alguien escribiria en la barra de busqueda
+- NO repitas queries similares con solo cambio de orden de palabras
+
+JSON array: ["query1", "query2", ...]
+SOLO el JSON array, nada mas."""
+            result = call_gemini(cfg, prompt)
+            queries = json.loads(result)
+            if not isinstance(queries, list) or len(queries) < 5:
+                raise ValueError("Pocas queries generadas")
+        except Exception:
+            pass
+
+    # Fallback: templates basicos si la IA falla
+    if not queries:
+        wm = wm_label.lower()
+        mode_terms_es = {"remoto": "remoto", "hibrido": "hibrido", "presencial": "presencial", "cualquiera": ""}
+        mode_terms_en = {"remoto": "remote", "hibrido": "hybrid", "presencial": "onsite", "cualquiera": ""}
+        for jt in [j.strip() for j in job_types.split(",") if j.strip()]:
+            if lang in ("1", "3"):
+                queries.extend([f"enviar CV {jt} {mode_terms_es.get(wm,'')}".strip(), f"busco {jt} {mode_terms_es.get(wm,'')}".strip(),
+                                f"contratando {jt} {mode_terms_es.get(wm,'')}".strip(), f"vacante {jt} {mode_terms_es.get(wm,'')}".strip()])
+            if lang in ("2", "3"):
+                queries.extend([f"hiring {jt} {mode_terms_en.get(wm,'')}".strip(), f"looking for {jt} {mode_terms_en.get(wm,'')}".strip(),
+                                f"send CV {jt} {mode_terms_en.get(wm,'')}".strip(), f"job opening {jt} {mode_terms_en.get(wm,'')}".strip()])
+
     cfg["search_queries"] = queries
     save_config(cfg)
 
