@@ -472,7 +472,7 @@ SOLO JSON valido.""", b64, "application/pdf")
         f"  [dim]Modelo[/dim]      {cfg.get('gemini_model', '?')}\n"
         f"  [dim]Plantilla[/dim]   {cfg.get('cv_template', 'modern')}\n"
         f"  [dim]Busquedas[/dim]   {len(queries)} generadas\n\n"
-        f"  Siguiente paso: [cyan]jobhunter --test tu@email.com[/cyan]",
+        f"  Siguiente paso: [cyan]jobhunter run[/cyan]",
         border_style="green", title="[bold]Resumen[/bold]"
     ))
 
@@ -944,54 +944,60 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, export_fmt=Non
     all_posts = []
     seen = set()
 
-    with sync_playwright() as p:
-        chrome = find_chrome()
-        browser = p.chromium.launch_persistent_context(
-            user_data_dir=SESSION_DIR, headless=True,
-            viewport={"width":1300,"height":850}, executable_path=chrome,
-        )
-        page = browser.pages[0] if browser.pages else browser.new_page()
-        page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded")
-        page.wait_for_timeout(4000)
+    try:
+        with sync_playwright() as p:
+            chrome = find_chrome()
+            browser = p.chromium.launch_persistent_context(
+                user_data_dir=SESSION_DIR, headless=True,
+                viewport={"width":1300,"height":850}, executable_path=chrome,
+            )
+            page = browser.pages[0] if browser.pages else browser.new_page()
+            page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded")
+            page.wait_for_timeout(4000)
 
-        if "login" in page.url or "signin" in page.url:
-            console.print("  [red]✗[/red] Sesion expirada. Ejecuta: [cyan]jobhunter login[/cyan]")
-            browser.close(); return
+            if "login" in page.url or "signin" in page.url:
+                console.print("  [red]![/red] Sesion expirada. Ejecuta: [cyan]jobhunter login[/cyan]")
+                browser.close(); return
 
-        total_q = len(queries)
-        total_emails_found = 0
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(bar_width=30),
-            TextColumn("{task.completed}/{task.total}"),
-            TimeElapsedColumn(),
-            console=console,
-        ) as prog:
-            task = prog.add_task("Buscando...", total=total_q)
-            for qi, query in enumerate(queries, 1):
-                prog.update(task, description=f"[dim]{query[:45]}[/dim]")
-                posts = scrape_posts(page, query, time_filter=time_filter)
-                for pi in posts:
-                    key = pi["text"][:150]
-                    if key not in seen:
-                        seen.add(key)
-                        all_posts.append(pi)
-                total_emails_found = sum(len(p.get("emails_found",[])) for p in all_posts)
-                prog.advance(task)
-                time.sleep(3)
+            total_q = len(queries)
+            total_emails_found = 0
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(bar_width=30),
+                TextColumn("{task.completed}/{task.total}"),
+                TimeElapsedColumn(),
+                console=console,
+            ) as prog:
+                task = prog.add_task("Buscando...", total=total_q)
+                for qi, query in enumerate(queries, 1):
+                    prog.update(task, description=f"[dim]{query[:45]}[/dim]")
+                    posts = scrape_posts(page, query, time_filter=time_filter)
+                    for pi in posts:
+                        key = pi["text"][:150]
+                        if key not in seen:
+                            seen.add(key)
+                            all_posts.append(pi)
+                    total_emails_found = sum(len(p.get("emails_found",[])) for p in all_posts)
+                    prog.advance(task)
+                    time.sleep(3)
 
-        # Screenshots (optional, quick)
-        text_boxes = page.query_selector_all('span[data-testid="expandable-text-box"]')
-        for post in all_posts:
-            post["screenshots"] = []
-            try:
-                if post["index"] < len(text_boxes):
-                    ss = text_boxes[post["index"]].screenshot()
-                    post["screenshots"].append(base64.b64encode(ss).decode())
-            except: pass
+            # Screenshots (optional, quick)
+            text_boxes = page.query_selector_all('span[data-testid="expandable-text-box"]')
+            for post in all_posts:
+                post["screenshots"] = []
+                try:
+                    if post["index"] < len(text_boxes):
+                        ss = text_boxes[post["index"]].screenshot()
+                        post["screenshots"].append(base64.b64encode(ss).decode())
+                except: pass
 
-        browser.close()
+            browser.close()
+    except KeyboardInterrupt:
+        console.print("\n  [dim]Cancelado.[/dim]")
+        return
+    except Exception:
+        pass
 
     posts_with_emails = [p for p in all_posts if p.get("emails_found")]
     posts_no_emails = len(all_posts) - len(posts_with_emails)
