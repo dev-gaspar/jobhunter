@@ -553,7 +553,7 @@
     <div class="container">
         <div class="section-num">4</div>
         <h2>Configurar JobHunter</h2>
-        <p>Ejecuta el wizard de configuracion. Te guiara paso a paso con una barra de progreso.</p>
+        <p>Ejecuta el wizard de configuracion. Son 7 pasos con barra de progreso.</p>
 
         <div class="code-block">
             <code>jobhunter setup</code>
@@ -566,28 +566,22 @@
         </div>
 
         <details>
-            <summary>Paso 1 — Clave API de Gemini</summary>
+            <summary>Paso 1 — Gemini AI (clave + modelo)</summary>
             <div class="detail-body">
                 <p>Pega la clave que obtuviste en el paso 2 de esta guia. El programa la verifica automaticamente.</p>
+                <p>Despues elige el modelo. Recomendado: <strong>gemini-2.5-flash</strong> (opcion 1, rapido y gratuito). Solo presiona Enter para mantener el default.</p>
             </div>
         </details>
 
         <details>
-            <summary>Paso 2 — Modelo de Gemini</summary>
+            <summary>Paso 2 — Gmail + Contrasena de aplicacion</summary>
             <div class="detail-body">
-                <p>Recomendado: <strong>gemini-2.5-flash</strong> (opcion 1). Es rapido y gratuito.</p>
+                <p>Escribe tu Gmail y la contrasena de aplicacion del paso 3 de esta guia. El programa verifica la conexion.</p>
             </div>
         </details>
 
         <details>
-            <summary>Paso 3 — Gmail + Contrasena de aplicacion</summary>
-            <div class="detail-body">
-                <p>Escribe tu Gmail y la contrasena de aplicacion del paso 3. El programa verifica la conexion.</p>
-            </div>
-        </details>
-
-        <details>
-            <summary>Paso 4 — Tu CV actual</summary>
+            <summary>Paso 3 — Tu CV actual</summary>
             <div class="detail-body">
                 <p>Arrastra tu CV en PDF a la terminal, o escribe la ruta del archivo. La IA lo lee y extrae tu informacion.</p>
                 <p>Ejemplo: <code class="os-path-example"></code></p>
@@ -595,60 +589,38 @@
         </details>
 
         <details>
-            <summary>Paso 5 — Portfolio (opcional)</summary>
+            <summary>Paso 4 — Links profesionales</summary>
             <div class="detail-body">
-                <p>URL de tu sitio web personal. Si no tienes, presiona Enter para saltar.</p>
+                <p>Portfolio y LinkedIn. Ambos opcionales, presiona Enter para saltar.</p>
             </div>
         </details>
 
         <details>
-            <summary>Paso 6 — LinkedIn</summary>
+            <summary>Paso 5 — Preferencias</summary>
             <div class="detail-body">
-                <p>URL de tu perfil. Ejemplo: <code>https://linkedin.com/in/tu-nombre</code></p>
-            </div>
-        </details>
-
-        <details>
-            <summary>Paso 7 — Plantilla de CV</summary>
-            <div class="detail-body">
-                <p>4 estilos disponibles:</p>
+                <p>En una sola pantalla configuras:</p>
                 <ul>
-                    <li><strong>Modern</strong> — Limpio con acentos de color (recomendado)</li>
-                    <li><strong>Minimal</strong> — Espacioso, elegante</li>
-                    <li><strong>Classic</strong> — Tradicional, fuente serif</li>
-                    <li><strong>Compact</strong> — Denso, mas contenido por pagina</li>
+                    <li><strong>Idiomas de busqueda</strong> — espanol, ingles, o ambos</li>
+                    <li><strong>Tus idiomas y nivel</strong> — Ej: <code>Espanol:Nativo, Ingles:B1</code></li>
+                    <li><strong>Modalidad</strong> — Remoto, Hibrido, Presencial, o Cualquiera</li>
+                    <li><strong>Plantilla de CV</strong> — Modern, Minimal, Classic, o Compact</li>
                 </ul>
             </div>
         </details>
 
         <details>
-            <summary>Paso 8 — Idiomas de busqueda</summary>
-            <div class="detail-body">
-                <p>En que idioma buscar ofertas en LinkedIn: espanol, ingles, o ambos.</p>
-            </div>
-        </details>
-
-        <details>
-            <summary>Paso 9 — Tus idiomas</summary>
-            <div class="detail-body">
-                <p>Que idiomas manejas y a que nivel. Se usa para filtrar ofertas que pidan idiomas que no dominas.</p>
-                <p>Formato: <code>Espanol:Nativo, Ingles:B1</code></p>
-                <p>Niveles: Nativo, Avanzado (C1-C2), Intermedio (B1-B2), Basico (A1-A2)</p>
-            </div>
-        </details>
-
-        <details>
-            <summary>Paso 10 — Modalidad de trabajo</summary>
-            <div class="detail-body">
-                <p>Remoto, Hibrido, Presencial, o Cualquiera. Si eliges hibrido o presencial, te pedira tu ubicacion.</p>
-            </div>
-        </details>
-
-        <details>
-            <summary>Paso 11 — Tipo de empleo + Login LinkedIn</summary>
+            <summary>Paso 6 — Tipo de empleo</summary>
             <div class="detail-body">
                 <p>Tipos de empleo separados por coma. Ejemplo: <code>Backend Developer, Full Stack, Data Engineer</code></p>
-                <p>Luego se abre Chrome para iniciar sesion en LinkedIn. Usa correo y contrasena (no el boton de Google). Cuando estes dentro, cierra el navegador.</p>
+                <p>La IA te sugiere opciones basadas en tu CV.</p>
+            </div>
+        </details>
+
+        <details>
+            <summary>Paso 7 — Login en LinkedIn</summary>
+            <div class="detail-body">
+                <p>Se abre Chrome para iniciar sesion en LinkedIn. Usa correo y contrasena (no el boton de Google). Cuando estes dentro, cierra el navegador.</p>
+                <p>Si ya tienes sesion guardada, puedes saltarlo.</p>
             </div>
         </details>
 

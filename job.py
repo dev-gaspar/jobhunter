@@ -247,10 +247,11 @@ def cmd_setup():
     lang_options = {"1": "Espanol", "2": "Ingles", "3": "Espanol e Ingles"}
     mode_options = {"1": "Remoto", "2": "Hibrido", "3": "Presencial", "4": "Cualquiera"}
 
+    TOTAL = 7
     # ── Step functions: return "back" to go back, anything else continues ──
 
-    def step_gemini_key():
-        _setup_screen(0, 11, "Clave API de Gemini", "Obtienla gratis en https://aistudio.google.com/apikey")
+    def step_gemini():
+        _setup_screen(0, TOTAL, "Gemini AI", "Obtiene la clave gratis en https://aistudio.google.com/apikey")
         while True:
             key = _ask("  Clave API", default=cfg.get("gemini_api_key", ""))
             if key is None: return "back"
@@ -262,29 +263,25 @@ def cmd_setup():
                     requests.post(url, json={"contents":[{"parts":[{"text":"test"}]}]}, timeout=10).raise_for_status()
                     cfg["gemini_api_key"] = key
                     console.print("  [green]>[/green] Clave valida")
-                    return
+                    break
                 except:
                     console.print("  [red]![/red] Clave invalida. Intenta de nuevo.")
-
-    def step_gemini_model():
-        _setup_screen(1, 11, "Modelo de Gemini")
+        # Model selection inline
+        console.print()
         current = cfg.get("gemini_model", "gemini-2.5-flash")
+        console.print(f"  [bold]Modelo[/bold] [dim](Enter para mantener {current})[/dim]")
         for i, m in enumerate(GEMINI_MODELS, 1):
             marker = " [green]<< actual[/green]" if m == current else ""
             console.print(f"  [cyan]{i}.[/cyan] {m}{marker}")
-        while True:
-            choice = _ask("  Selecciona", default=str(GEMINI_MODELS.index(current) + 1 if current in GEMINI_MODELS else 1))
-            if choice is None: return "back"
-            try:
-                idx = int(choice) - 1
-                if 0 <= idx < len(GEMINI_MODELS):
-                    cfg["gemini_model"] = GEMINI_MODELS[idx]
-                    return
-            except ValueError: pass
-            console.print(f"  [red]![/red] Numero del 1 al {len(GEMINI_MODELS)}")
+        choice = _ask("  Selecciona", default=str(GEMINI_MODELS.index(current) + 1 if current in GEMINI_MODELS else 1))
+        if choice is None: return "back"
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(GEMINI_MODELS): cfg["gemini_model"] = GEMINI_MODELS[idx]
+        except ValueError: pass
 
     def step_gmail():
-        _setup_screen(2, 11, "Gmail + Contrasena de aplicacion", "Cuenta Google > Seguridad > Contrasenas de aplicacion")
+        _setup_screen(1, TOTAL, "Gmail + Contrasena de aplicacion", "Cuenta Google > Seguridad > Contrasenas de aplicacion")
         while True:
             email = _ask("  Gmail", default=cfg.get("smtp_email", ""))
             if email is None: return "back"
@@ -306,11 +303,11 @@ def cmd_setup():
                     console.print(f"  [red]![/red] {e}")
 
     def step_cv():
-        _setup_screen(3, 11, "Tu CV actual", "Ruta al archivo PDF")
+        _setup_screen(2, TOTAL, "Tu CV actual", "Ruta al archivo PDF")
         while True:
             cv = _ask("  Ruta del CV (.pdf)", default=cfg.get("cv_path", ""))
             if cv is None: return "back"
-            if not cv: return  # skip
+            if not cv: return
             if not os.path.exists(cv):
                 console.print(f"  [red]![/red] No encontrado: {cv}"); continue
             cfg["cv_path"] = cv
@@ -335,47 +332,28 @@ SOLO JSON valido.""", b64, "application/pdf")
                     console.print(f"  [red]![/red] Error: {e}")
                     return
 
-    def step_portfolio():
-        _setup_screen(4, 11, "Portfolio / Web personal", "Opcional, Enter para saltar")
-        val = _ask("  URL", default=profile.get("portfolio", ""))
-        if val is None: return "back"
-        profile["portfolio"] = val
+    def step_links():
+        _setup_screen(3, TOTAL, "Links profesionales", "Opcional, Enter para saltar")
+        portfolio = _ask("  Portfolio / web personal", default=profile.get("portfolio", ""))
+        if portfolio is None: return "back"
+        profile["portfolio"] = portfolio
+        console.print()
+        linkedin = _ask("  Perfil de LinkedIn", default=profile.get("linkedin", ""))
+        if linkedin is None: return "back"
+        profile["linkedin"] = linkedin
 
-    def step_linkedin():
-        _setup_screen(5, 11, "Perfil de LinkedIn")
-        val = _ask("  URL", default=profile.get("linkedin", ""))
-        if val is None: return "back"
-        profile["linkedin"] = val
-
-    def step_cv_template():
-        _setup_screen(6, 11, "Plantilla de CV", "Estilo visual del PDF generado")
-        current_tmpl = cfg.get("cv_template", DEFAULT_TEMPLATE)
-        tmpl_keys = list(TEMPLATES.keys())
-        for i, key in enumerate(tmpl_keys, 1):
-            t = TEMPLATES[key]
-            marker = " [green]<< actual[/green]" if key == current_tmpl else ""
-            console.print(f"  [cyan]{i}.[/cyan] {t['name']} — [dim]{t['description']}[/dim]{marker}")
-        while True:
-            choice = _ask("  Selecciona", default=str(tmpl_keys.index(current_tmpl) + 1))
-            if choice is None: return "back"
-            try:
-                idx = int(choice) - 1
-                if 0 <= idx < len(tmpl_keys):
-                    cfg["cv_template"] = tmpl_keys[idx]; return
-            except ValueError: pass
-            console.print(f"  [red]![/red] Numero del 1 al {len(tmpl_keys)}")
-
-    def step_search_langs():
-        _setup_screen(7, 11, "En que idiomas buscar ofertas?", "Las ofertas y CVs se generaran en el idioma de cada oferta")
+    def step_preferences():
+        _setup_screen(4, TOTAL, "Preferencias", "Idiomas, modalidad y plantilla de CV")
+        # Search languages
+        console.print("  [bold]Idiomas de busqueda[/bold]")
         for k, v in lang_options.items():
             console.print(f"  [cyan]{k}.[/cyan] {v}")
         choice = _ask("  Selecciona", default=cfg.get("search_languages", "3"))
         if choice is None: return "back"
         cfg["search_languages"] = choice if choice in lang_options else "3"
-
-    def step_user_langs():
-        _setup_screen(8, 11, "Que idiomas manejas y a que nivel?", "Ej: Espanol:Nativo, Ingles:B1")
-        console.print("  [dim]Niveles: Nativo, Avanzado (C1-C2), Intermedio (B1-B2), Basico (A1-A2)[/dim]")
+        # User languages
+        console.print()
+        console.print("  [bold]Tus idiomas y nivel[/bold] [dim](Ej: Espanol:Nativo, Ingles:B1)[/dim]")
         existing = cfg.get("user_languages", [])
         default = ", ".join(f"{l['language']}:{l['level']}" for l in existing) if existing else ""
         val = _ask("  Idiomas", default=default)
@@ -389,9 +367,9 @@ SOLO JSON valido.""", b64, "application/pdf")
             elif part:
                 langs.append({"language": part, "level": "Nativo"})
         cfg["user_languages"] = langs
-
-    def step_work_mode():
-        _setup_screen(9, 11, "Que modalidad de trabajo buscas?")
+        # Work mode
+        console.print()
+        console.print("  [bold]Modalidad de trabajo[/bold]")
         for k, v in mode_options.items():
             console.print(f"  [cyan]{k}.[/cyan] {v}")
         choice = _ask("  Selecciona", default=cfg.get("work_mode", "4"))
@@ -406,9 +384,24 @@ SOLO JSON valido.""", b64, "application/pdf")
             cfg["user_location"] = loc
         else:
             cfg["user_location"] = cfg.get("user_location", "")
+        # CV template
+        console.print()
+        console.print("  [bold]Plantilla de CV[/bold]")
+        current_tmpl = cfg.get("cv_template", DEFAULT_TEMPLATE)
+        tmpl_keys = list(TEMPLATES.keys())
+        for i, key in enumerate(tmpl_keys, 1):
+            t = TEMPLATES[key]
+            marker = " [green]<< actual[/green]" if key == current_tmpl else ""
+            console.print(f"  [cyan]{i}.[/cyan] {t['name']} — [dim]{t['description']}[/dim]{marker}")
+        choice = _ask("  Selecciona", default=str(tmpl_keys.index(current_tmpl) + 1))
+        if choice is None: return "back"
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(tmpl_keys): cfg["cv_template"] = tmpl_keys[idx]
+        except ValueError: pass
 
     def step_job_types():
-        _setup_screen(10, 11, "Que tipo de empleo buscas?")
+        _setup_screen(5, TOTAL, "Que tipo de empleo buscas?")
         if profile.get("skills"):
             with console.status("  [dim]Generando sugerencias...[/dim]"):
                 try:
@@ -426,7 +419,7 @@ SOLO JSON valido.""", b64, "application/pdf")
         cfg["job_types_raw"] = val
 
     def step_linkedin_login():
-        _setup_screen(11, 11, "Login en LinkedIn", "Se abrira Chrome para iniciar sesion")
+        _setup_screen(6, TOTAL, "Login en LinkedIn", "Se abrira Chrome para iniciar sesion")
         if os.path.exists(SESSION_DIR):
             console.print("  [green]>[/green] Sesion existente detectada")
             skip = _ask("  Saltar login? (s/n)", default="s")
@@ -436,9 +429,8 @@ SOLO JSON valido.""", b64, "application/pdf")
         _do_linkedin_login()
 
     # ── State machine ──
-    steps = [step_gemini_key, step_gemini_model, step_gmail, step_cv,
-             step_portfolio, step_linkedin, step_cv_template, step_search_langs,
-             step_user_langs, step_work_mode, step_job_types, step_linkedin_login]
+    steps = [step_gemini, step_gmail, step_cv, step_links,
+             step_preferences, step_job_types, step_linkedin_login]
     idx = 0
     while idx < len(steps):
         result = steps[idx]()

@@ -145,7 +145,7 @@ Se guarda en `knowledge.json` bajo `rejected_companies`.
 
 ## Como funciona (alto nivel)
 
-1. **Setup**: Wizard interactivo de 11 pasos con barra de porcentaje y pantalla limpia por paso. Configuras API key, modelo, Gmail, CV, plantilla, idiomas, modalidad, tipo de empleo, y login de LinkedIn. Puedes volver al paso anterior escribiendo `<`.
+1. **Setup**: Wizard interactivo de 7 pasos con barra de porcentaje y pantalla limpia por paso. Configuras API key + modelo, Gmail, CV, links, preferencias (idiomas, modalidad, plantilla), tipo de empleo, y login de LinkedIn. Puedes volver al paso anterior escribiendo `<`.
 2. **Busqueda**: El sistema busca publicaciones en LinkedIn con tus terminos, expande el texto de cada post, y extrae emails de reclutadores
 4. **Analisis**: Un agente de IA analiza cada publicacion para determinar si es una oferta real y relevante para tu perfil
 5. **Seleccion**: Se muestra una tabla con las ofertas encontradas y puedes elegir a cuales aplicar (o usar `--auto` para todas)
