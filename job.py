@@ -236,6 +236,7 @@ def _step_header(num, total, title, subtitle=None):
     console.print(f"  [bold]{title}[/bold]")
     if subtitle:
         console.print(f"  [dim]{subtitle}[/dim]")
+    console.print("  [dim]Atajos: b volver · q salir[/dim]")
 
 def _phase_header(title):
     """Print a styled phase header for run command."""
@@ -243,89 +244,222 @@ def _phase_header(title):
     console.print(Rule(f"[bold]{title}[/bold]", style="cyan"))
     console.print()
 
+def _choose_pdf_file_dialog(initial_path=""):
+    """Open native file picker dialog and return selected PDF path."""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+
+        initial_dir = ""
+        if initial_path:
+            if os.path.isdir(initial_path):
+                initial_dir = initial_path
+            else:
+                initial_dir = os.path.dirname(initial_path)
+        if not initial_dir:
+            initial_dir = str(Path.home())
+
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        selected = filedialog.askopenfilename(
+            title="Selecciona tu CV (PDF)",
+            filetypes=[("Archivos PDF", "*.pdf")],
+            initialdir=initial_dir,
+        )
+        root.destroy()
+        return selected or None
+    except Exception:
+        return None
+
+def _remember_recent_cv_path(cfg, cv_path, limit=5):
+    """Store most recent CV paths in config."""
+    if not cv_path:
+        return
+    current = [p for p in cfg.get("recent_cv_paths", []) if p and p != cv_path]
+    cfg["recent_cv_paths"] = [cv_path] + current[: max(0, limit - 1)]
+
 
 def cmd_setup():
     console.print(get_banner())
     total_steps = 8
-
     cfg = load_config()
-
-    # 1. Gemini
-    _step_header(1, total_steps, "Clave API de Gemini", "Obtienla gratis en https://aistudio.google.com/apikey")
-    while True:
-        key = Prompt.ask("  Clave API", default=cfg.get("gemini_api_key", ""))
-        if not key:
-            console.print("  [red]La clave API es obligatoria.[/red]")
-            continue
-        with console.status("  [dim]Verificando...[/dim]"):
-            try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
-                requests.post(url, json={"contents":[{"parts":[{"text":"test"}]}]}, timeout=10).raise_for_status()
-                console.print("  [green]✓[/green] Clave valida")
-                cfg["gemini_api_key"] = key
-                break
-            except:
-                console.print("  [red]✗[/red] Clave API invalida. Intentalo de nuevo.")
-
-    # 1b. Modelo de Gemini
-    console.print()
-    console.print(f"  [bold]Modelo de Gemini[/bold]")
-    current_model = cfg.get("gemini_model", "gemini-2.5-flash")
-    for i, m in enumerate(GEMINI_MODELS, 1):
-        marker = " [green]◄ actual[/green]" if m == current_model else ""
-        console.print(f"  [cyan]{i}.[/cyan] {m}{marker}")
-    while True:
-        choice = Prompt.ask("  Selecciona modelo", default=str(GEMINI_MODELS.index(current_model) + 1 if current_model in GEMINI_MODELS else 1))
-        try:
-            idx = int(choice) - 1
-            if 0 <= idx < len(GEMINI_MODELS):
-                cfg["gemini_model"] = GEMINI_MODELS[idx]
-                console.print(f"  [green]✓[/green] {GEMINI_MODELS[idx]}")
-                break
-        except ValueError:
-            pass
-        console.print(f"  [red]✗[/red] Selecciona un numero del 1 al {len(GEMINI_MODELS)}")
-
-    # 2. Gmail
-    _step_header(2, total_steps, "Correo Gmail + Contrasena de aplicacion", "Cuenta Google > Seguridad > Contrasenas de aplicacion")
-    while True:
-        email = Prompt.ask("  Gmail", default=cfg.get("smtp_email", ""))
-        if not re.match(r'^[^@]+@gmail\.com$', email):
-            console.print("  [red]✗[/red] Debe ser una cuenta @gmail.com")
-            continue
-        pwd = Prompt.ask("  Contrasena de app", default=cfg.get("smtp_password",""), password=True)
-        if not pwd or len(pwd) < 10:
-            console.print("  [red]✗[/red] La contrasena de aplicacion debe tener al menos 16 caracteres")
-            continue
-        with console.status("  [dim]Verificando SMTP...[/dim]"):
-            try:
-                with smtplib.SMTP("smtp.gmail.com", 587) as s:
-                    s.starttls(); s.login(email, pwd)
-                console.print("  [green]✓[/green] Conexion SMTP verificada")
-                cfg["smtp_email"] = email
-                cfg["smtp_password"] = pwd
-                break
-            except Exception as e:
-                console.print(f"  [red]✗[/red] Error: {e}")
-                console.print("  [yellow]  Verifica el App Password e intenta de nuevo.[/yellow]")
-
-    # 3. CV
-    _step_header(3, total_steps, "Tu CV actual", "Ruta al archivo PDF de tu CV")
     profile = cfg.get("profile", {})
-    while True:
-        cv = Prompt.ask("  Ruta del CV (.pdf)", default=cfg.get("cv_path", ""))
-        if not cv:
-            console.print("  [yellow]![/yellow] Sin CV. Puedes agregarlo despues con 'jobhunter setup'")
-            break
-        if not os.path.exists(cv):
-            console.print(f"  [red]✗[/red] Archivo no encontrado: {cv}")
+    lang_options = {"1": "Espanol", "2": "Ingles", "3": "Espanol e Ingles"}
+    mode_options = {"1": "Remoto", "2": "Hibrido", "3": "Presencial", "4": "Cualquiera"}
+    step = 1
+
+    def _ask_setup(label, default="", password=False):
+        value = Prompt.ask(
+            label,
+            default=default,
+            password=password,
+        ).strip()
+        low = value.lower()
+        if low == "b":
+            return "__BACK__"
+        if low == "q":
+            return "__QUIT__"
+        return value
+
+    while step <= total_steps:
+        if step == 1:
+            _step_header(1, total_steps, "Clave API de Gemini", "Obtienla gratis en https://aistudio.google.com/apikey")
+            while True:
+                key = _ask_setup("  Clave API", cfg.get("gemini_api_key", ""))
+                if key == "__QUIT__":
+                    console.print("  [yellow]Setup cancelado.[/yellow]")
+                    return
+                if not key:
+                    console.print("  [red]La clave API es obligatoria.[/red]")
+                    continue
+                with console.status("  [dim]Verificando...[/dim]"):
+                    try:
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
+                        requests.post(url, json={"contents":[{"parts":[{"text":"test"}]}]}, timeout=10).raise_for_status()
+                        console.print("  [green]✓[/green] Clave valida")
+                        cfg["gemini_api_key"] = key
+                        break
+                    except:
+                        console.print("  [red]✗[/red] Clave API invalida. Intentalo de nuevo.")
+
+            while True:
+                console.print()
+                console.print("  [bold]Modelo de Gemini[/bold]")
+                current_model = cfg.get("gemini_model", "gemini-2.5-flash")
+                for i, m in enumerate(GEMINI_MODELS, 1):
+                    marker = " [green]◄ actual[/green]" if m == current_model else ""
+                    console.print(f"  [cyan]{i}.[/cyan] {m}{marker}")
+                choice = _ask_setup(
+                    "  Selecciona modelo",
+                    str(GEMINI_MODELS.index(current_model) + 1 if current_model in GEMINI_MODELS else 1),
+                )
+                if choice == "__QUIT__":
+                    console.print("  [yellow]Setup cancelado.[/yellow]")
+                    return
+                if choice == "__BACK__":
+                    break
+                try:
+                    idx = int(choice) - 1
+                    if 0 <= idx < len(GEMINI_MODELS):
+                        cfg["gemini_model"] = GEMINI_MODELS[idx]
+                        console.print(f"  [green]✓[/green] {GEMINI_MODELS[idx]}")
+                        step = 2
+                        break
+                except ValueError:
+                    pass
+                console.print(f"  [red]✗[/red] Selecciona un numero del 1 al {len(GEMINI_MODELS)}")
             continue
-        cfg["cv_path"] = cv
-        with console.status("  [dim]Leyendo CV con Gemini AI...[/dim]"):
-            try:
-                with open(cv, "rb") as f:
-                    b64 = base64.b64encode(f.read()).decode()
-                result = call_gemini_vision(cfg, """Lee este CV/resume y extrae TODA la informacion en JSON.
+
+        if step == 2:
+            _step_header(2, total_steps, "Correo Gmail + Contrasena de aplicacion", "Cuenta Google > Seguridad > Contrasenas de aplicacion")
+            while True:
+                email = _ask_setup("  Gmail", cfg.get("smtp_email", ""))
+                if email == "__QUIT__":
+                    console.print("  [yellow]Setup cancelado.[/yellow]")
+                    return
+                if email == "__BACK__":
+                    step = 1
+                    break
+                if not re.match(r'^[^@]+@gmail\.com$', email):
+                    console.print("  [red]✗[/red] Debe ser una cuenta @gmail.com")
+                    continue
+                pwd = _ask_setup("  Contrasena de app", cfg.get("smtp_password",""), password=True)
+                if pwd == "__QUIT__":
+                    console.print("  [yellow]Setup cancelado.[/yellow]")
+                    return
+                if pwd == "__BACK__":
+                    continue
+                if not pwd or len(pwd) < 10:
+                    console.print("  [red]✗[/red] La contrasena de aplicacion debe tener al menos 16 caracteres")
+                    continue
+                with console.status("  [dim]Verificando SMTP...[/dim]"):
+                    try:
+                        with smtplib.SMTP("smtp.gmail.com", 587) as s:
+                            s.starttls(); s.login(email, pwd)
+                        console.print("  [green]✓[/green] Conexion SMTP verificada")
+                        cfg["smtp_email"] = email
+                        cfg["smtp_password"] = pwd
+                        step = 3
+                        break
+                    except Exception as e:
+                        console.print(f"  [red]✗[/red] Error: {e}")
+                        console.print("  [yellow]  Verifica el App Password e intenta de nuevo.[/yellow]")
+            continue
+
+        if step == 3:
+            _step_header(3, total_steps, "Tu CV actual", "Ruta al archivo PDF de tu CV")
+            while True:
+                console.print("  [cyan]1.[/cyan] Selector de archivo (recomendado)")
+                console.print("  [cyan]2.[/cyan] Elegir de recientes")
+                console.print("  [cyan]3.[/cyan] Escribir ruta manual")
+                choice = _ask_setup("  Metodo", "1")
+                if choice == "__QUIT__":
+                    console.print("  [yellow]Setup cancelado.[/yellow]")
+                    return
+                if choice == "__BACK__":
+                    step = 2
+                    break
+
+                cv = None
+                if choice == "1":
+                    cv = _choose_pdf_file_dialog(cfg.get("cv_path", ""))
+                    if not cv:
+                        console.print("  [yellow]![/yellow] No seleccionaste archivo.")
+                        continue
+                    console.print(f"  [green]✓[/green] Archivo seleccionado: {cv}")
+                elif choice == "2":
+                    recents = [p for p in cfg.get("recent_cv_paths", []) if p]
+                    if not recents:
+                        console.print("  [yellow]![/yellow] No hay CVs recientes guardados.")
+                        continue
+                    console.print("  [bold]Recientes:[/bold]")
+                    for i, path in enumerate(recents, 1):
+                        console.print(f"    [cyan]{i}.[/cyan] {path}")
+                    pick = _ask_setup("  Selecciona numero", "1")
+                    if pick == "__QUIT__":
+                        console.print("  [yellow]Setup cancelado.[/yellow]")
+                        return
+                    if pick == "__BACK__":
+                        continue
+                    try:
+                        idx = int(pick) - 1
+                        if idx < 0 or idx >= len(recents):
+                            raise ValueError()
+                        cv = recents[idx]
+                    except ValueError:
+                        console.print("  [red]✗[/red] Numero invalido.")
+                        continue
+                elif choice == "3":
+                    cv = _ask_setup("  Ruta del CV (.pdf)", cfg.get("cv_path", ""))
+                    if cv == "__QUIT__":
+                        console.print("  [yellow]Setup cancelado.[/yellow]")
+                        return
+                    if cv == "__BACK__":
+                        continue
+                    if not cv:
+                        console.print("  [red]✗[/red] El CV es obligatorio para continuar.")
+                        continue
+                else:
+                    console.print("  [red]✗[/red] Opcion invalida (1-3).")
+                    continue
+
+                if not os.path.exists(cv):
+                    console.print(f"  [red]✗[/red] Archivo no encontrado: {cv}")
+                    continue
+                if os.path.isdir(cv):
+                    console.print(f"  [red]✗[/red] Debes indicar un archivo PDF, no una carpeta: {cv}")
+                    continue
+                if not cv.lower().endswith(".pdf"):
+                    console.print(f"  [red]✗[/red] El archivo debe ser .pdf: {cv}")
+                    continue
+                cfg["cv_path"] = cv
+                _remember_recent_cv_path(cfg, cv)
+                with console.status("  [dim]Leyendo CV con Gemini AI...[/dim]"):
+                    try:
+                        with open(cv, "rb") as f:
+                            b64 = base64.b64encode(f.read()).decode()
+                        result = call_gemini_vision(cfg, """Lee este CV/resume y extrae TODA la informacion en JSON.
 Adapta las categorias de skills al perfil real de la persona (no asumas que es tech).
 {"name":"","title":"titulo profesional","email":"","phone":"","linkedin":"","portfolio":"","location":"",
 "summary":"resumen profesional completo",
@@ -334,88 +468,128 @@ Adapta las categorias de skills al perfil real de la persona (no asumas que es t
 "education":[{"institution":"","degree":"","period":""}],
 "projects":[{"name":"","description":"","tech":[]}],"achievements":[]}
 SOLO JSON valido.""", b64, "application/pdf")
-                profile = json.loads(result)
-                console.print(f"  [green]✓[/green] CV leido — {profile.get('name', '?')}")
-                skills_preview = ', '.join(list(profile.get('skills',{}).values())[0][:5]) if profile.get('skills') else '-'
-                console.print(f"    [dim]{skills_preview}...[/dim]")
-                break
-            except Exception as e:
-                console.print(f"  [red]✗[/red] Error leyendo CV: {e}")
-                console.print("  [yellow]  Puedes continuar sin CV automatico.[/yellow]")
-                break
+                        profile = json.loads(result)
+                        console.print(f"  [green]✓[/green] CV leido — {profile.get('name', '?')}")
+                        skills_preview = ', '.join(list(profile.get('skills',{}).values())[0][:5]) if profile.get('skills') else '-'
+                        console.print(f"    [dim]{skills_preview}...[/dim]")
+                    except Exception as e:
+                        console.print(f"  [red]✗[/red] Error leyendo CV: {e}")
+                        console.print("  [yellow]  Puedes continuar sin CV automatico.[/yellow]")
+                    step = 4
+                    break
+            continue
 
-    # 4. Portfolio
-    _step_header(4, total_steps, "Portfolio / Web personal", "Opcional")
-    portfolio = Prompt.ask("  URL", default=profile.get("portfolio", ""))
-    profile["portfolio"] = portfolio
+        if step == 4:
+            _step_header(4, total_steps, "Portfolio / Web personal", "Opcional")
+            portfolio = _ask_setup("  URL", profile.get("portfolio", ""))
+            if portfolio == "__QUIT__":
+                console.print("  [yellow]Setup cancelado.[/yellow]")
+                return
+            if portfolio == "__BACK__":
+                step = 3
+                continue
+            profile["portfolio"] = portfolio
+            step = 5
+            continue
 
-    # 5. LinkedIn
-    _step_header(5, total_steps, "Perfil de LinkedIn")
-    linkedin = Prompt.ask("  URL", default=profile.get("linkedin", ""))
-    if linkedin and "linkedin.com" not in linkedin:
-        console.print("  [yellow]![/yellow] Eso no parece un URL de LinkedIn")
-    profile["linkedin"] = linkedin
+        if step == 5:
+            _step_header(5, total_steps, "Perfil de LinkedIn")
+            linkedin = _ask_setup("  URL", profile.get("linkedin", ""))
+            if linkedin == "__QUIT__":
+                console.print("  [yellow]Setup cancelado.[/yellow]")
+                return
+            if linkedin == "__BACK__":
+                step = 4
+                continue
+            if linkedin and "linkedin.com" not in linkedin:
+                console.print("  [yellow]![/yellow] Eso no parece un URL de LinkedIn")
+            profile["linkedin"] = linkedin
+            cfg["profile"] = profile
+            step = 6
+            continue
 
-    cfg["profile"] = profile
+        if step == 6:
+            _step_header(6, total_steps, "En que idiomas buscar ofertas?", "Las ofertas y CVs se generaran en el idioma de cada oferta")
+            for k, v in lang_options.items():
+                console.print(f"  [cyan]{k}.[/cyan] {v}")
+            lang_default = cfg.get("search_languages", "3")
+            lang_choice = _ask_setup("  Selecciona", lang_default)
+            if lang_choice == "__QUIT__":
+                console.print("  [yellow]Setup cancelado.[/yellow]")
+                return
+            if lang_choice == "__BACK__":
+                step = 5
+                continue
+            if lang_choice not in lang_options:
+                lang_choice = "3"
+            cfg["search_languages"] = lang_choice
+            console.print(f"  [green]✓[/green] {lang_options[lang_choice]}")
+            step = 7
+            continue
 
-    # 6. Idiomas de busqueda
-    _step_header(6, total_steps, "En que idiomas buscar ofertas?", "Las ofertas y CVs se generaran en el idioma de cada oferta")
-    lang_options = {"1": "Espanol", "2": "Ingles", "3": "Espanol e Ingles"}
-    for k, v in lang_options.items():
-        console.print(f"  [cyan]{k}.[/cyan] {v}")
-    lang_default = cfg.get("search_languages", "3")
-    lang_choice = Prompt.ask("  Selecciona", default=lang_default)
-    if lang_choice not in lang_options:
-        lang_choice = "3"
-    cfg["search_languages"] = lang_choice
-    console.print(f"  [green]✓[/green] {lang_options[lang_choice]}")
-
-    # 7. Modalidad de trabajo
-    _step_header(7, total_steps, "Que modalidad de trabajo buscas?")
-    mode_options = {"1": "Remoto", "2": "Hibrido", "3": "Presencial", "4": "Cualquiera"}
-    for k, v in mode_options.items():
-        console.print(f"  [cyan]{k}.[/cyan] {v}")
-    mode_default = cfg.get("work_mode", "4")
-    mode_choice = Prompt.ask("  Selecciona", default=mode_default)
-    if mode_choice not in mode_options:
-        mode_choice = "4"
-    cfg["work_mode"] = mode_choice
-    cfg["work_mode_label"] = mode_options[mode_choice]
-    console.print(f"  [green]✓[/green] {mode_options[mode_choice]}")
-
-    # 7b. Ubicacion (si hibrido o presencial)
-    if mode_choice in ("2", "3"):
-        console.print()
-        console.print(f"  [bold]Tu ubicacion[/bold]")
-        console.print("  [dim]Ciudad y pais para filtrar ofertas cercanas[/dim]")
-        location = Prompt.ask("  Ubicacion", default=cfg.get("user_location", profile.get("location", "")))
-        cfg["user_location"] = location
-    else:
-        cfg["user_location"] = cfg.get("user_location", "")
-
-    # 8. Preferencias de empleo
-    _step_header(8, total_steps, "Que tipo de empleo buscas?")
-
-    if profile.get("skills"):
-        with console.status("  [dim]Generando sugerencias de tu CV...[/dim]"):
-            try:
-                s = json.dumps(profile.get("skills",{}))
-                e = json.dumps(profile.get("experience",[])[:3])
-                result = call_gemini(cfg, f"Basado en skills: {s} y experiencia: {e}, sugiere 6 tipos de empleo. JSON array: [\"tipo1\",\"tipo2\"]")
-                suggestions = json.loads(result)
-                console.print("  [dim]Sugerencias basadas en tu CV:[/dim]")
-                for i, sg in enumerate(suggestions, 1):
-                    console.print(f"  [cyan]{i}.[/cyan] {sg}")
+        if step == 7:
+            _step_header(7, total_steps, "Que modalidad de trabajo buscas?")
+            for k, v in mode_options.items():
+                console.print(f"  [cyan]{k}.[/cyan] {v}")
+            mode_default = cfg.get("work_mode", "4")
+            mode_choice = _ask_setup("  Selecciona", mode_default)
+            if mode_choice == "__QUIT__":
+                console.print("  [yellow]Setup cancelado.[/yellow]")
+                return
+            if mode_choice == "__BACK__":
+                step = 6
+                continue
+            if mode_choice not in mode_options:
+                mode_choice = "4"
+            cfg["work_mode"] = mode_choice
+            cfg["work_mode_label"] = mode_options[mode_choice]
+            console.print(f"  [green]✓[/green] {mode_options[mode_choice]}")
+            if mode_choice in ("2", "3"):
                 console.print()
-            except:
-                pass
+                console.print("  [bold]Tu ubicacion[/bold]")
+                console.print("  [dim]Ciudad y pais para filtrar ofertas cercanas[/dim]")
+                location = _ask_setup("  Ubicacion", cfg.get("user_location", profile.get("location", "")))
+                if location == "__QUIT__":
+                    console.print("  [yellow]Setup cancelado.[/yellow]")
+                    return
+                if location == "__BACK__":
+                    continue
+                cfg["user_location"] = location
+            else:
+                cfg["user_location"] = cfg.get("user_location", "")
+            step = 8
+            continue
 
-    console.print("  [dim]Escribe los tipos de empleo separados por coma[/dim]")
-    job_types = Prompt.ask("  Tipos de empleo", default=cfg.get("job_types_raw", ""))
-    if not job_types:
-        console.print("  [red]✗[/red] Debes especificar al menos un tipo de empleo.")
-        job_types = Prompt.ask("  Tipos de empleo", default="backend developer")
-    cfg["job_types_raw"] = job_types
+        if step == 8:
+            _step_header(8, total_steps, "Que tipo de empleo buscas?")
+
+            if profile.get("skills"):
+                with console.status("  [dim]Generando sugerencias de tu CV...[/dim]"):
+                    try:
+                        s = json.dumps(profile.get("skills",{}))
+                        e = json.dumps(profile.get("experience",[])[:3])
+                        result = call_gemini(cfg, f"Basado en skills: {s} y experiencia: {e}, sugiere 6 tipos de empleo. JSON array: [\"tipo1\",\"tipo2\"]")
+                        suggestions = json.loads(result)
+                        console.print("  [dim]Sugerencias basadas en tu CV:[/dim]")
+                        for i, sg in enumerate(suggestions, 1):
+                            console.print(f"  [cyan]{i}.[/cyan] {sg}")
+                        console.print()
+                    except:
+                        pass
+
+            console.print("  [dim]Escribe los tipos de empleo separados por coma[/dim]")
+            job_types = _ask_setup("  Tipos de empleo", cfg.get("job_types_raw", ""))
+            if job_types == "__QUIT__":
+                console.print("  [yellow]Setup cancelado.[/yellow]")
+                return
+            if job_types == "__BACK__":
+                step = 7
+                continue
+            if not job_types:
+                console.print("  [red]✗[/red] Debes especificar al menos un tipo de empleo.")
+                continue
+            cfg["job_types_raw"] = job_types
+            break
 
     # Generar queries segun idioma y modalidad
     lang = cfg.get("search_languages", "3")
