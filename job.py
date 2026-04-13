@@ -44,7 +44,6 @@ from rich.table import Table
 from rich.prompt import Prompt, Confirm
 from rich.progress import Progress, BarColumn, TextColumn, SpinnerColumn, TimeElapsedColumn
 from rich.text import Text
-from rich.rule import Rule
 from rich import print as rprint
 from playwright.sync_api import sync_playwright
 
@@ -450,6 +449,7 @@ SOLO JSON valido.""", b64, "application/pdf")
     location = cfg.get("user_location", "")
 
     queries = []
+    location_line = "- Ubicacion: " + location if location else ""
     with console.status("  [dim]Generando queries de busqueda con IA...[/dim]"):
         try:
             prompt = f"""Eres un experto en reclutamiento y busqueda de empleo en LinkedIn.
@@ -461,7 +461,7 @@ Deben encontrar posts donde reclutadores publican ofertas con email de contacto 
 PERFIL DEL CANDIDATO:
 - Busca empleo como: {job_types}
 - Modalidad: {wm_label}
-{f'- Ubicacion: {location}' if location else ''}
+{location_line}
 - Idiomas de busqueda: {lang_label}
 
 REGLAS:
@@ -748,6 +748,7 @@ def agent_filter(cfg, text, ss=None):
     user_location = cfg.get("user_location", "")
     user_languages = cfg.get("user_languages", [])
     user_langs_str = ", ".join(lang["language"] + " (" + lang["level"] + ")" for lang in user_languages) if user_languages else "No especificados"
+    user_location_line = "- Ubicacion del candidato: " + user_location if user_location else ""
 
     work_mode_rule = ""
     if work_mode_label.lower() == "remoto":
@@ -763,7 +764,7 @@ Tu unico trabajo es analizar publicaciones y determinar si contienen ofertas REA
 PERFIL DEL CANDIDATO:
 - Busca empleo como: {job_types}
 - Modalidad preferida: {work_mode_label}
-{f'- Ubicacion del candidato: {user_location}' if user_location else ''}
+{user_location_line}
 - Idiomas del candidato: {user_langs_str}
 - Resumen: {profile_summary[:300]}
 - Habilidades: {json.dumps(profile_skills) if isinstance(profile_skills, dict) else str(profile_skills)[:500]}
@@ -1106,12 +1107,12 @@ def cmd_run(
     before_bl = len(offers_with_email)
     offers_with_email = [o for o in offers_with_email if (o.get("company") or "").lower() not in rejected]
     blacklisted = before_bl - len(offers_with_email)
+    blacklist_info = "  ·  " + str(blacklisted) + " bloqueadas" if blacklisted else ""
 
     console.print(
         f"  [bold]{len(offers)}[/bold] ofertas  ·  "
         f"[green]{len(offers_with_email)}[/green] con email  ·  "
-        f"[dim]{batch_dupes} duplicadas  ·  {len(offers_no_email)} sin email"
-        f"{f'  ·  {blacklisted} bloqueadas' if blacklisted else ''}[/dim]"
+        f"[dim]{batch_dupes} duplicadas  ·  {len(offers_no_email)} sin email{blacklist_info}[/dim]"
     )
     console.print()
 
@@ -1213,14 +1214,10 @@ def cmd_run(
                 console.print(f"  [red]✗[/red] Formato invalido. Ej: 1,3,5 o 'all'")
 
     # ── Phase 3: Generate & Send ──
-    if dry_run:
-        console.print()
-        console.print(Rule("Fase 3 — Generando CVs (dry-run, sin enviar)", style="cyan"))
-        console.print()
-    else:
-        console.print()
-        console.print("  [bold dim]Generando y enviando...[/bold dim]")
-        console.print()
+    console.print()
+    phase3_label = "Generando CVs (dry-run, sin enviar)..." if dry_run else "Generando y enviando..."
+    console.print(f"  [bold dim]{phase3_label}[/bold dim]")
+    console.print()
     sent = 0
     generated = 0
     errors = 0
@@ -1607,8 +1604,8 @@ def cmd_history(last=10, company_filter=None, since=None, show_all=False):
 
     for i, app in enumerate(apps, 1):
         date_str = app.get("date", "")[:10]
-        mode = app.get("mode", "RUN")
-        mode_style = "[yellow]TEST[/yellow]" if mode == "TEST" else "[green]RUN[/green]"
+        mode = (app.get("mode") or "run").lower()
+        mode_style = "[yellow]TEST[/yellow]" if mode == "test" else "[green]RUN[/green]"
         post_link = f"[link={app['post_url']}]Ver[/link]" if app.get("post_url") else "[dim]—[/dim]"
         table.add_row(
             str(i),
