@@ -4,27 +4,20 @@ CV PDF Builder - Generates professional PDF CVs using ReportLab
 
 import os, re
 from datetime import datetime
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.units import inch
-from reportlab.lib.colors import HexColor
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Paragraph,
-    Spacer,
-    Table,
-    TableStyle,
-    HRFlowable,
-)
-from reportlab.lib.enums import TA_LEFT, TA_JUSTIFY
 
 
-# Color scheme
-PRIMARY = HexColor("#1a1a2e")
-ACCENT = HexColor("#0f3460")
-TEXT_DARK = HexColor("#2d2d2d")
-TEXT_LIGHT = HexColor("#555555")
-LINE_COLOR = HexColor("#cccccc")
+def _normalize_ats(text: str) -> str:
+    """Normalize Unicode characters that ATS parsers handle poorly."""
+    t = str(text)
+    t = t.replace("\u2014", "-").replace("\u2013", "-")        # em/en dash
+    t = t.replace("\u2018", "'").replace("\u2019", "'")        # smart single quotes
+    t = t.replace("\u201c", '"').replace("\u201d", '"')        # smart double quotes
+    t = t.replace("\u2026", "...")                              # ellipsis
+    t = t.replace("\u00a0", " ")                               # non-breaking space
+    t = t.replace("\u200b", "").replace("\ufeff", "")          # zero-width chars
+    t = t.replace("\u2022", "-")                               # bullet
+    t = t.replace("\u00b7", "-")                               # middle dot
+    return t
 
 
 def _clean_markdown(text: str) -> str:
@@ -43,124 +36,15 @@ def _clean_markdown(text: str) -> str:
 
 
 def _safe(text: str) -> str:
-    """Clean markdown and escape XML special chars for ReportLab Paragraph."""
+    """Clean markdown, normalize ATS chars, and escape XML for ReportLab."""
     t = _clean_markdown(text)
+    t = _normalize_ats(t)
     return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def build_styles():
-    """Create custom paragraph styles for the CV."""
-    styles = getSampleStyleSheet()
-
-    styles.add(
-        ParagraphStyle(
-            name="CVName",
-            fontName="Helvetica-Bold",
-            fontSize=20,
-            textColor=PRIMARY,
-            spaceAfter=6,
-            leading=24,
-            alignment=TA_LEFT,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="CVTitle",
-            fontName="Helvetica",
-            fontSize=10,
-            textColor=ACCENT,
-            spaceAfter=6,
-            leading=13,
-            alignment=TA_LEFT,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="CVContact",
-            fontName="Helvetica",
-            fontSize=8,
-            textColor=TEXT_LIGHT,
-            spaceAfter=10,
-            leading=11,
-            alignment=TA_LEFT,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="CVSection",
-            fontName="Helvetica-Bold",
-            fontSize=10,
-            textColor=PRIMARY,
-            spaceBefore=12,
-            spaceAfter=4,
-            leading=13,
-            alignment=TA_LEFT,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="CVSummary",
-            fontName="Helvetica",
-            fontSize=9,
-            textColor=TEXT_DARK,
-            spaceAfter=6,
-            alignment=TA_JUSTIFY,
-            leading=13,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="CVCompany",
-            fontName="Helvetica-Bold",
-            fontSize=9,
-            textColor=TEXT_DARK,
-            spaceAfter=1,
-            leading=12,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="CVPeriod",
-            fontName="Helvetica",
-            fontSize=8,
-            textColor=TEXT_LIGHT,
-            spaceAfter=3,
-            leading=10,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="CVBullet",
-            fontName="Helvetica",
-            fontSize=8.5,
-            textColor=TEXT_DARK,
-            leftIndent=12,
-            spaceAfter=2,
-            leading=11,
-            alignment=TA_JUSTIFY,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="CVSkill",
-            fontName="Helvetica",
-            fontSize=8.5,
-            textColor=TEXT_DARK,
-            spaceAfter=4,
-            leading=12,
-        )
-    )
-    styles.add(
-        ParagraphStyle(
-            name="CVProject",
-            fontName="Helvetica",
-            fontSize=8.5,
-            textColor=TEXT_DARK,
-            spaceAfter=3,
-            leading=11,
-        )
-    )
-    return styles
+def safe_header_name(profile: dict, cv_data: dict) -> str:
+    """Nombre para el encabezado si falta profile.name (evita KeyError)."""
+    return (profile.get("name") or cv_data.get("title") or "Candidato").strip() or "Candidato"
 
 
 SECTION_LABELS = {
@@ -179,121 +63,12 @@ def generate_cv_pdf(
     job_title: str = "",
     company: str = "",
     language: str = "es",
+    template: str = "modern",
 ):
-    """Generate a professional PDF CV."""
-    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-    labels = SECTION_LABELS.get(language, SECTION_LABELS["es"])
-
-    doc = SimpleDocTemplate(
-        output_path,
-        pagesize=letter,
-        leftMargin=0.6 * inch,
-        rightMargin=0.6 * inch,
-        topMargin=0.5 * inch,
-        bottomMargin=0.5 * inch,
-    )
-
-    styles = build_styles()
-    story = []
-
-    # === HEADER ===
-    story.append(Paragraph(_safe(profile["name"]), styles["CVName"]))
-    story.append(Spacer(1, 2))
-    story.append(
-        Paragraph(_safe(cv_data.get("title", profile["title"])), styles["CVTitle"])
-    )
-    story.append(Spacer(1, 4))
-
-    contact_parts = []
-    if profile.get("email"):
-        contact_parts.append(profile["email"])
-    if profile.get("phone"):
-        contact_parts.append(profile["phone"])
-    if profile.get("linkedin"):
-        contact_parts.append(profile["linkedin"])
-    if profile.get("portfolio"):
-        contact_parts.append(profile["portfolio"])
-    if profile.get("location"):
-        contact_parts.append(profile["location"])
-
-    story.append(Paragraph(_safe(" | ".join(contact_parts)), styles["CVContact"]))
-    story.append(HRFlowable(width="100%", thickness=1, color=LINE_COLOR, spaceAfter=8))
-
-    # === RESUMEN PROFESIONAL ===
-    story.append(Paragraph(labels["summary"], styles["CVSection"]))
-    story.append(Paragraph(_safe(cv_data["summary"]), styles["CVSummary"]))
-
-    # === HABILIDADES ===
-    skills = cv_data.get("skills_highlighted", [])
-    if skills:
-        story.append(Paragraph(labels["skills"], styles["CVSection"]))
-        story.append(
-            HRFlowable(width="100%", thickness=0.5, color=LINE_COLOR, spaceAfter=4)
-        )
-        skills_text = _safe(" | ".join(skills))
-        story.append(Paragraph(skills_text, styles["CVSkill"]))
-
-    # === EXPERIENCIA ===
-    experience = cv_data.get("experience", [])
-    if experience:
-        story.append(Paragraph(labels["experience"], styles["CVSection"]))
-        story.append(
-            HRFlowable(width="100%", thickness=0.5, color=LINE_COLOR, spaceAfter=4)
-        )
-
-        for exp in experience:
-            company_name = _safe(exp["company"])
-            role_name = _safe(exp["role"])
-            story.append(
-                Paragraph(
-                    f"<b>{company_name}</b> — <i>{role_name}</i>", styles["CVCompany"]
-                )
-            )
-            story.append(Paragraph(_safe(exp["period"]), styles["CVPeriod"]))
-
-            for bullet in exp.get("bullets", []):
-                story.append(Paragraph(f"- {_safe(bullet)}", styles["CVBullet"]))
-            story.append(Spacer(1, 3))
-
-    # === PROYECTOS ===
-    projects = cv_data.get("projects", [])
-    if projects:
-        story.append(Paragraph(labels["projects"], styles["CVSection"]))
-        story.append(
-            HRFlowable(width="100%", thickness=0.5, color=LINE_COLOR, spaceAfter=4)
-        )
-
-        for proj in projects:
-            tech_str = _safe(", ".join(proj.get("tech", [])))
-            proj_name = _safe(proj["name"])
-            proj_desc = _safe(proj["description"])
-            story.append(
-                Paragraph(
-                    f"<b>{proj_name}</b> — {proj_desc} ({tech_str})",
-                    styles["CVProject"],
-                )
-            )
-
-    # === EDUCACION ===
-    education = cv_data.get("education", profile.get("education", []))
-    if education:
-        story.append(Paragraph(labels["education"], styles["CVSection"]))
-        story.append(
-            HRFlowable(width="100%", thickness=0.5, color=LINE_COLOR, spaceAfter=4)
-        )
-
-        for edu in education:
-            degree = _safe(edu["degree"])
-            institution = _safe(edu["institution"])
-            period = _safe(edu["period"])
-            story.append(
-                Paragraph(
-                    f"<b>{degree}</b> — {institution} ({period})", styles["CVProject"]
-                )
-            )
-
-    doc.build(story)
-    return output_path
+    """Generate a professional PDF CV using the specified template."""
+    from src.cv_templates import get_template
+    tmpl = get_template(template)
+    return tmpl["generate"](cv_data, profile, output_path, job_title, company, language)
 
 
 def get_cv_filename(company: str, job_title: str) -> str:
