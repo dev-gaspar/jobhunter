@@ -7,6 +7,7 @@ Uso:
     jobhunter                       Primera vez = asistente de config
     jobhunter --test <email>        Modo prueba (envia a tu correo)
     jobhunter run                   Buscar y enviar a reclutadores
+    jobhunter run --dry             Pipeline completo sin enviar emails
     jobhunter login                 Iniciar sesion en LinkedIn
     jobhunter status                Ver configuracion y estadisticas
     jobhunter setup                 Configuracion inicial
@@ -168,7 +169,7 @@ def call_gemini_vision(cfg, prompt, img_b64, mime="image/png"):
 def send_email(cfg, to, subject, body, cv_path=None, max_retries=3):
     """Send email with retry on failure."""
     msg = MIMEMultipart()
-    msg["From"] = f"{cfg['profile']['name']} <{cfg['smtp_email']}>"
+    msg["From"] = f"{cfg['profile'].get('name') or 'Candidato'} <{cfg['smtp_email']}>"
     msg["To"] = to
     msg["Subject"] = subject
     msg.attach(MIMEText(body, "plain", "utf-8"))
@@ -957,7 +958,14 @@ JSON (sin markdown, sin bloques de codigo):
 # ══════════════════════════════════════════════
 # RUN
 # ══════════════════════════════════════════════
-def cmd_run(test_email=None, time_filter="24h", auto_apply=False, export_fmt=None, export_path=None):
+def cmd_run(
+    test_email=None,
+    time_filter="24h",
+    auto_apply=False,
+    dry_run=False,
+    export_fmt=None,
+    export_path=None,
+):
     cfg = load_config()
     kb = load_kb()
 
@@ -973,11 +981,12 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, export_fmt=Non
 
     time_labels = {"24h": "Ultimas 24h", "week": "Esta semana", "month": "Este mes"}
     mode_label = f"[yellow]TEST → {test_email}[/yellow]" if test_email else "[green]Reclutadores[/green]"
+    dry_line = "\n  [dim]Dry-run[/dim]   [yellow]Si — sin enviar emails[/yellow]" if dry_run else ""
     console.print(Panel(
         f"  [dim]Perfil[/dim]     {cfg['profile'].get('name','?')}\n"
         f"  [dim]Destino[/dim]    {mode_label}\n"
         f"  [dim]Periodo[/dim]    {time_labels.get(time_filter, time_filter)}\n"
-        f"  [dim]Queries[/dim]    {len(cfg.get('search_queries',[]))}",
+        f"  [dim]Queries[/dim]    {len(cfg.get('search_queries',[]))}{dry_line}",
         border_style="cyan", title="[bold]Sesion[/bold]"
     ))
 
@@ -1204,12 +1213,19 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, export_fmt=Non
                 console.print(f"  [red]✗[/red] Formato invalido. Ej: 1,3,5 o 'all'")
 
     # ── Phase 3: Generate & Send ──
-    console.print()
-    console.print("  [bold dim]Generando y enviando...[/bold dim]")
-    console.print()
+    if dry_run:
+        console.print()
+        console.print(Rule("Fase 3 — Generando CVs (dry-run, sin enviar)", style="cyan"))
+        console.print()
+    else:
+        console.print()
+        console.print("  [bold dim]Generando y enviando...[/bold dim]")
+        console.print()
     sent = 0
+    generated = 0
     errors = 0
     results = []
+    preview_send_all = False
 
     total = len(offers)
     for i, job in enumerate(offers, 1):
@@ -1219,9 +1235,9 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, export_fmt=Non
         to = test_email or rec_email
         label = f"  [cyan]{i}[/cyan][dim]/{total}[/dim] {title} [dim]→[/dim] {company}"
 
-        # Generate CV + Email + Send under a single status spinner
         cv_path = None
         edata = None
+        cv_data = None
         try:
             with console.status(f"{label}  [dim]CV...[/dim]") as status:
                 for retry in range(3):
@@ -1230,10 +1246,19 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, export_fmt=Non
                         cv_fn = get_cv_filename(company, title)
                         cv_path = os.path.join(BASE_DIR, "output", "cvs", cv_fn)
                         os.makedirs(os.path.dirname(cv_path), exist_ok=True)
-                        generate_cv_pdf(cv_data, cfg["profile"], cv_path, title, company, language=job.get("language", "es"), template=cfg.get("cv_template", "modern"))
+                        generate_cv_pdf(
+                            cv_data,
+                            cfg["profile"],
+                            cv_path,
+                            title,
+                            company,
+                            language=job.get("language", "es"),
+                            template=cfg.get("cv_template", "modern"),
+                        )
                         break
                     except Exception as e:
-                        if retry == 2: raise
+                        if retry == 2:
+                            raise
                         time.sleep(5)
 
                 status.update(f"{label}  [dim]Email...[/dim]")
@@ -1242,21 +1267,106 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, export_fmt=Non
                         edata = agent_email(cfg, job, cv_data=cv_data)
                         break
                     except Exception as e:
-                        if retry == 2: raise
+                        if retry == 2:
+                            raise
                         time.sleep(5)
+        except Exception as e:
+            console.print(f"{label}  [red]! {e}[/red]")
+            errors += 1
+            results.append({
+                "job_title": title,
+                "company": company,
+                "recruiter_email": rec_email,
+                "sent_to": to,
+                "cv_path": cv_path,
+            })
+            time.sleep(2)
+            continue
 
-                status.update(f"{label}  [dim]Enviando...[/dim]")
-                body = edata["body"]
-                if test_email:
-                    body = f"--- RECLUTADOR: {job.get('contact_name','?')} | EMAIL: {rec_email or '?'} | {company} ---\n\n" + body
-                send_email(cfg, to, edata["subject"], body, cv_path)
+        body = edata["body"]
+        if test_email:
+            body = f"--- RECLUTADOR: {job.get('contact_name','?')} | EMAIL: {rec_email or '?'} | {company} ---\n\n" + body
 
+        cv_name = os.path.basename(cv_path) if cv_path else ""
+
+        if dry_run:
+            generated += 1
+            preview_text = (
+                f"Para: {to}\n"
+                f"Asunto: {edata['subject']}\n"
+                f"CV adjunto: {cv_name or '—'}\n\n"
+                f"{body}"
+            )
+            console.print(Panel(preview_text, border_style="dim", title="[dim]Dry run[/dim]"))
+            console.print("       [yellow]·[/yellow] Dry-run: no se envia email (no se guarda en historial)")
+            results.append({
+                "job_title": title,
+                "company": company,
+                "recruiter_email": rec_email,
+                "sent_to": to,
+                "cv_path": cv_path,
+                "dry_run": True,
+            })
+            console.print()
+            time.sleep(2)
+            continue
+
+        do_send = False
+        if auto_apply or preview_send_all:
+            do_send = True
+        else:
+            while True:
+                preview_text = (
+                    f"Para: {to}\n"
+                    f"Asunto: {edata['subject']}\n"
+                    f"CV adjunto: {cv_name or '—'}\n\n"
+                    f"{body}"
+                )
+                console.print(Panel(preview_text, border_style="cyan", title="[bold]Preview[/bold]"))
+                choice = Prompt.ask(
+                    "  [[s]] Enviar  [[x]] Saltar  [[e]] Editar asunto  [[a]] Enviar todos sin preguntar",
+                    default="s",
+                ).strip().lower()
+                if choice in ("s", "send", ""):
+                    do_send = True
+                    break
+                if choice in ("x", "skip"):
+                    do_send = False
+                    console.print("       [yellow]·[/yellow] Omitido")
+                    break
+                if choice in ("e", "edit"):
+                    edata["subject"] = Prompt.ask("  Asunto", default=edata["subject"])
+                    continue
+                if choice in ("a", "all"):
+                    preview_send_all = True
+                    do_send = True
+                    break
+                console.print("  [red]✗[/red] Opcion invalida (s/x/e/a)")
+
+        if not do_send:
+            results.append({
+                "job_title": title,
+                "company": company,
+                "recruiter_email": rec_email,
+                "sent_to": to,
+                "cv_path": cv_path,
+                "skipped": True,
+            })
+            console.print()
+            time.sleep(1)
+            continue
+
+        try:
+            send_email(cfg, to, edata["subject"], body, cv_path)
             sent += 1
             console.print(f"{label}  [green]> Enviado[/green] [dim]→ {to}[/dim]")
             kb["applications"].append({
-                "date": datetime.now().isoformat(), "job_title": title,
-                "company": company, "recruiter_email": rec_email,
-                "sent_to": to, "mode": mode,
+                "date": datetime.now().isoformat(),
+                "job_title": title,
+                "company": company,
+                "recruiter_email": rec_email,
+                "sent_to": to,
+                "mode": mode,
                 "post_url": job.get("post_url"),
             })
         except Exception as e:
@@ -1264,22 +1374,47 @@ def cmd_run(test_email=None, time_filter="24h", auto_apply=False, export_fmt=Non
             errors += 1
 
         results.append({
-            "job_title": title, "company": company,
-            "recruiter_email": rec_email, "sent_to": to, "cv_path": cv_path,
+            "job_title": title,
+            "company": company,
+            "recruiter_email": rec_email,
+            "sent_to": to,
+            "cv_path": cv_path,
         })
         time.sleep(2)
 
-    kb["runs"].append({"date": datetime.now().isoformat(), "mode": mode, "posts": len(all_posts), "offers": len(offers), "sent": sent})
+    run_entry = {
+        "date": datetime.now().isoformat(),
+        "mode": "dry-run" if dry_run else mode,
+        "posts": len(all_posts),
+        "offers": len(offers),
+        "sent": 0 if dry_run else sent,
+    }
+    if dry_run:
+        run_entry["generated"] = generated
+    kb["runs"].append(run_entry)
     save_kb(kb)
 
     # Summary
     err_str = f"[red]{errors}[/red]" if errors else "[dim]0[/dim]"
+    if dry_run:
+        summary_body = (
+            f"  [dim]Posts scraped[/dim]       {len(all_posts)}\n"
+            f"  [dim]Analizados[/dim]          {len(posts_with_emails)}  [dim](con email)[/dim]\n"
+            f"  [dim]Ofertas[/dim]             {len(offers)}\n"
+            f"  [dim]Generados[/dim]           [bold]{generated}[/bold]  [dim](CV + email)[/dim]\n"
+            f"  [dim]Enviados[/dim]            [bold]0[/bold]  [dim](dry-run)[/dim]\n"
+            f"  [dim]Errores[/dim]             {err_str}"
+        )
+    else:
+        summary_body = (
+            f"  [dim]Posts scraped[/dim]       {len(all_posts)}\n"
+            f"  [dim]Analizados[/dim]          {len(posts_with_emails)}  [dim](con email)[/dim]\n"
+            f"  [dim]Ofertas[/dim]             {len(offers)}\n"
+            f"  [dim]Enviados[/dim]            [bold green]{sent}[/bold green]\n"
+            f"  [dim]Errores[/dim]             {err_str}"
+        )
     console.print(Panel(
-        f"  [dim]Posts scraped[/dim]       {len(all_posts)}\n"
-        f"  [dim]Analizados[/dim]          {len(posts_with_emails)}  [dim](con email)[/dim]\n"
-        f"  [dim]Ofertas[/dim]             {len(offers)}\n"
-        f"  [dim]Enviados[/dim]            [bold green]{sent}[/bold green]\n"
-        f"  [dim]Errores[/dim]             {err_str}",
+        summary_body,
         border_style="green" if errors == 0 else "yellow", title="[bold]Resumen[/bold]"
     ))
 
@@ -1554,6 +1689,7 @@ def cmd_help():
     opts.add_row("--time week", "Esta semana")
     opts.add_row("--time month", "Este mes")
     opts.add_row("--auto", "Aplicar a todas sin preguntar")
+    opts.add_row("--dry", "Generar CVs y emails sin enviar [dim](run / --test)[/dim]")
     opts.add_row("--export csv|json ruta", "Exportar ofertas a archivo [dim](run)[/dim]")
     opts.add_row("--last N", "Ultimas N aplicaciones [dim](history)[/dim]")
     opts.add_row("--company \"...\"", "Filtrar por empresa [dim](history)[/dim]")
@@ -1566,6 +1702,9 @@ def cmd_help():
     console.print("  [dim]Despues del analisis puedes elegir a cuales aplicar:[/dim]")
     console.print("  [cyan]1,3,5[/cyan]  Solo esas  ·  [cyan]all[/cyan]  Todas  ·  [cyan]q[/cyan]  Cancelar")
     console.print()
+    console.print("  [bold]Preview antes de enviar[/bold]  [dim](sin --auto ni --dry)[/dim]")
+    console.print("  Tras generar CV y email: [cyan]s[/cyan] enviar · [cyan]x[/cyan] saltar · [cyan]e[/cyan] editar asunto · [cyan]a[/cyan] enviar todos")
+    console.print()
 
     # Examples
     console.print("  [bold]Ejemplos[/bold]")
@@ -1573,6 +1712,7 @@ def cmd_help():
     console.print("  [dim]$ jobhunter run --time week[/dim]")
     console.print("  [dim]$ jobhunter run --auto[/dim]")
     console.print("  [dim]$ jobhunter run --time month --auto[/dim]")
+    console.print("  [dim]$ jobhunter run --dry --time week[/dim]")
     console.print("  [dim]$ jobhunter optimize[/dim]")
     console.print('  [dim]$ jobhunter optimize "no encuentro ofertas remotas"[/dim]')
     console.print()
@@ -1620,6 +1760,7 @@ def main():
     cmd = sys.argv[1]
     tf = parse_time_filter(sys.argv)
     auto = "--auto" in sys.argv
+    dry = "--dry" in sys.argv
     export = None
     export_path = None
     for i, a in enumerate(sys.argv):
@@ -1662,12 +1803,25 @@ def main():
         if export and not export_path:
             console.print("  [red]![/red] --export requiere ruta. Ej: jobhunter --test email --export csv ofertas.csv")
             return
-        cmd_run(test_email=sys.argv[2], time_filter=tf, auto_apply=auto, export_fmt=export, export_path=export_path)
+        cmd_run(
+            test_email=sys.argv[2],
+            time_filter=tf,
+            auto_apply=auto,
+            dry_run=dry,
+            export_fmt=export,
+            export_path=export_path,
+        )
     elif cmd in ("run",):
         if export and not export_path:
             console.print("  [red]![/red] --export requiere ruta. Ej: jobhunter run --export csv ofertas.csv")
             return
-        cmd_run(time_filter=tf, auto_apply=auto, export_fmt=export, export_path=export_path)
+        cmd_run(
+            time_filter=tf,
+            auto_apply=auto,
+            dry_run=dry,
+            export_fmt=export,
+            export_path=export_path,
+        )
     else:
         console.print(get_banner())
         console.print(f"  [red]✗[/red] Comando desconocido: [bold]{cmd}[/bold]")

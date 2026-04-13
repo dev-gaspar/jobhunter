@@ -42,6 +42,10 @@ def _safe(text: str) -> str:
     return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def safe_header_name(profile: dict, cv_data: dict) -> str:
+    """Nombre para el encabezado si falta profile.name (evita KeyError)."""
+    return (profile.get("name") or cv_data.get("title") or "Candidato").strip() or "Candidato"
+
 
 SECTION_LABELS = {
     "es": {"summary": "RESUMEN PROFESIONAL", "skills": "HABILIDADES TECNICAS", "experience": "EXPERIENCIA PROFESIONAL", "projects": "PROYECTOS CLAVE", "education": "EDUCACION"},

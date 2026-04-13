@@ -7,7 +7,7 @@ from reportlab.lib.colors import HexColor
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
-from src.cv_builder import _safe, SECTION_LABELS
+from src.cv_builder import _safe, SECTION_LABELS, safe_header_name
 
 PRIMARY = HexColor("#333333")
 TEXT_DARK = HexColor("#444444")
@@ -52,7 +52,7 @@ def generate(cv_data, profile, output_path, job_title="", company="", language="
     story = []
 
     # Header — centered, minimal
-    story.append(Paragraph(_safe(profile["name"]).upper(), styles["CVName"]))
+    story.append(Paragraph(_safe(safe_header_name(profile, cv_data)).upper(), styles["CVName"]))
     story.append(Paragraph(_safe(cv_data.get("title", profile.get("title", ""))), styles["CVTitle"]))
 
     contact_parts = [v for k in ("email", "phone", "linkedin", "portfolio", "location")
@@ -62,7 +62,7 @@ def generate(cv_data, profile, output_path, job_title="", company="", language="
 
     # Summary
     story.append(Paragraph(labels["summary"].upper(), styles["CVSection"]))
-    story.append(Paragraph(_safe(cv_data["summary"]), styles["CVSummary"]))
+    story.append(Paragraph(_safe(cv_data.get("summary") or ""), styles["CVSummary"]))
 
     # Skills
     skills = cv_data.get("skills_highlighted", [])

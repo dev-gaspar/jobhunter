@@ -7,7 +7,7 @@ from reportlab.lib.colors import HexColor
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table, TableStyle
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_JUSTIFY
-from src.cv_builder import _safe, SECTION_LABELS
+from src.cv_builder import _safe, SECTION_LABELS, safe_header_name
 
 PRIMARY = HexColor("#0d47a1")
 TEXT_DARK = HexColor("#212121")
@@ -54,7 +54,7 @@ def generate(cv_data, profile, output_path, job_title="", company="", language="
     page_width = letter[0] - 1.0 * inch  # usable width
 
     # Header — compact with name and contact on same visual block
-    story.append(Paragraph(_safe(profile["name"]), styles["CVName"]))
+    story.append(Paragraph(_safe(safe_header_name(profile, cv_data)), styles["CVName"]))
     story.append(Paragraph(_safe(cv_data.get("title", profile.get("title", ""))), styles["CVTitle"]))
 
     contact_parts = [v for k in ("email", "phone", "linkedin", "portfolio", "location")
@@ -64,7 +64,7 @@ def generate(cv_data, profile, output_path, job_title="", company="", language="
 
     # Summary — compact
     story.append(Paragraph(labels["summary"], styles["CVSection"]))
-    story.append(Paragraph(_safe(cv_data["summary"]), styles["CVSummary"]))
+    story.append(Paragraph(_safe(cv_data.get("summary") or ""), styles["CVSummary"]))
 
     # Skills — two-column layout
     skills = cv_data.get("skills_highlighted", [])
