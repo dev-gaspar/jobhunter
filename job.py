@@ -230,7 +230,7 @@ def _setup_screen(current, total, title, subtitle=None):
     if subtitle:
         console.print(f"  [dim]{subtitle}[/dim]")
     if current > 0:
-        console.print("  [dim]Atajos: < o b volver · q salir[/dim]")
+        console.print("  [dim]Atajos: (<) o (b) volver · (q) salir[/dim]")
     console.print()
 
 def _ask(label, **kwargs):
