@@ -546,24 +546,49 @@ def _do_linkedin_login():
     console.print("  1. Se abrira Chrome")
     console.print("  2. Inicia sesion con [bold]correo y contrasena[/bold]")
     console.print("     [red]NO uses el boton de Google[/red] (bloqueado en automatizado)")
-    console.print("  3. Cuando estes dentro, [bold]cierra el navegador[/bold]")
+    console.print("  3. Si pide [bold]verificacion en dos pasos[/bold], completala en tu celular/email")
+    console.print("  4. NO cierres el navegador. Se cerrara [bold]automaticamente[/bold] cuando la sesion este lista")
     input("\n  Presiona Enter para abrir el navegador...")
+    success = False
     with sync_playwright() as p:
         browser = p.chromium.launch_persistent_context(
             user_data_dir=SESSION_DIR, headless=False,
-            viewport={"width":1300,"height":850}, executable_path=chrome,
+            viewport={"width": 1300, "height": 850}, executable_path=chrome,
         )
         page = browser.pages[0] if browser.pages else browser.new_page()
-        page.goto("https://www.linkedin.com/login")
-        console.print("  [dim]Esperando que inicies sesion y cierres el navegador...[/dim]")
         try:
-            while True:
-                time.sleep(1)
-                try: _ = page.title()
-                except: break
-        except: pass
-    console.print("  [green]>[/green] Sesion de LinkedIn guardada")
-    return True
+            page.goto("https://www.linkedin.com/login")
+        except Exception:
+            pass
+        console.print("  [dim]Esperando que completes el login y el 2FA (hasta 5 minutos)...[/dim]")
+
+        # Espera activa: la sesion esta lista cuando el URL es /feed/ o /in/
+        # Timeout: 5 minutos para dar tiempo al 2FA
+        start = time.time()
+        while time.time() - start < 300:
+            try:
+                url = page.url
+                if "/feed" in url or "/in/" in url or "linkedin.com/home" in url:
+                    # Esperar 3s mas para que las cookies se guarden bien
+                    time.sleep(3)
+                    success = True
+                    break
+                time.sleep(2)
+            except Exception:
+                # El usuario cerro el navegador manualmente
+                break
+
+        # Cerrar el browser explicitamente para guardar cookies
+        try:
+            browser.close()
+        except Exception:
+            pass
+
+    if success:
+        console.print("  [green]>[/green] Sesion de LinkedIn guardada correctamente")
+    else:
+        console.print("  [yellow]![/yellow] No se detecto el login completo. Si completaste el 2FA pero no llegaste al feed, vuelve a ejecutar [cyan]jobhunter login[/cyan]")
+    return success
 
 
 def cmd_login():
