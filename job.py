@@ -1373,7 +1373,7 @@ def cmd_run(
                 )
                 console.print(Panel(preview_text, border_style="cyan", title="[bold]Preview[/bold]"))
                 choice = Prompt.ask(
-                    "  [[s]] Enviar  [[x]] Saltar  [[e]] Editar asunto  [[a]] Enviar todos sin preguntar",
+                    "  (s) Enviar  (x) Saltar  (e) Editar asunto  (a) Enviar todos sin preguntar",
                     default="s",
                 ).strip().lower()
                 if choice in ("s", "send", ""):
