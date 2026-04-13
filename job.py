@@ -389,18 +389,30 @@ def cmd_setup():
                     console.print(f"  [red]![/red] {e}")
 
     def step_cv():
-        _setup_screen(8, TOTAL, "Tu CV actual", "Ruta al archivo PDF")
+        _setup_screen(8, TOTAL, "Tu CV actual", "Ruta al archivo PDF — OBLIGATORIO")
+        console.print("  [dim]El CV se lee con IA para extraer tu experiencia real. Sin CV no se puede continuar.[/dim]")
         while True:
             cv = _ask("  Ruta del CV (.pdf)", default=cfg.get("cv_path", ""))
             if cv is None: return "back"
-            if not cv: return
+            if not cv:
+                console.print("  [red]![/red] El CV es obligatorio. La IA lo usa para adaptar tu experiencia REAL a cada oferta.")
+                continue
             if not os.path.exists(cv):
                 console.print(f"  [red]![/red] No encontrado: {cv}"); continue
-            cfg["cv_path"] = cv
+            # Verificar que se puede leer (permisos)
+            try:
+                with open(cv, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode()
+            except PermissionError:
+                console.print(f"  [red]![/red] Sin permisos para leer: {cv}")
+                console.print("  [dim]Copia el archivo a otra ubicacion o ajusta los permisos e intenta de nuevo.[/dim]")
+                continue
+            except Exception as e:
+                console.print(f"  [red]![/red] No se pudo leer el archivo: {e}")
+                continue
+            # Leer con Gemini
             with console.status("  [dim]Leyendo CV con Gemini AI...[/dim]"):
                 try:
-                    with open(cv, "rb") as f:
-                        b64 = base64.b64encode(f.read()).decode()
                     result = call_gemini_vision(cfg, """Lee este CV/resume y extrae TODA la informacion en JSON.
 Adapta las categorias de skills al perfil real de la persona (no asumas que es tech).
 {"name":"","title":"titulo profesional","email":"","phone":"","linkedin":"","portfolio":"","location":"",
@@ -411,12 +423,18 @@ Adapta las categorias de skills al perfil real de la persona (no asumas que es t
 "projects":[{"name":"","description":"","tech":[]}],"achievements":[]}
 SOLO JSON valido.""", b64, "application/pdf")
                     nonlocal profile
-                    profile = json.loads(result)
+                    parsed = json.loads(result)
+                    if not parsed.get("name"):
+                        console.print(f"  [red]![/red] El CV parece invalido o la IA no pudo extraer datos. Verifica el PDF.")
+                        continue
+                    profile = parsed
+                    cfg["cv_path"] = cv
                     console.print(f"  [green]>[/green] CV leido — {profile.get('name', '?')}")
                     return
                 except Exception as e:
-                    console.print(f"  [red]![/red] Error: {e}")
-                    return
+                    console.print(f"  [red]![/red] Error al procesar con IA: {e}")
+                    console.print("  [dim]Intenta con otro PDF o revisa que la clave de Gemini sea valida.[/dim]")
+                    continue
 
     def step_linkedin_login():
         _setup_screen(9, TOTAL, "Login en LinkedIn", "Se abrira Chrome para iniciar sesion")
@@ -827,9 +845,18 @@ REGLAS CRITICAS:
 - TEXTO PLANO UNICAMENTE. PROHIBIDO usar markdown: nada de **negritas**, *italicas*, `codigo`, # encabezados, ni ningun formato. Solo texto limpio.
 - Usa la MISMA TERMINOLOGIA de la oferta. Si la oferta dice "Community Manager", el CV dice "Community Manager". Si dice "Backend Developer", dice "Backend Developer".
 - NO traduzcas terminos que en la industria se usan en su idioma original
-- Adapta TODO el CV al sector y lenguaje de la oferta
-- PROHIBIDO INVENTAR. No agregues habilidades, tecnologias, idiomas, certificaciones, logros o experiencias que NO esten en el perfil del candidato. Solo puedes REORDENAR, REFORMULAR y DESTACAR lo que YA existe. Si la oferta pide algo que el candidato no tiene, simplemente no lo menciones.
+- REGLA MAS IMPORTANTE — PROHIBIDO INVENTAR CUALQUIER COSA. El candidato ya te entrego su informacion real. Tu unica tarea es TOMAR LO QUE YA ESTA y REORDENARLO/REFORMULARLO. No agregues:
+  * Habilidades que el candidato no tiene (si no usa React, NO pongas React)
+  * Tecnologias o herramientas no mencionadas en el perfil real
+  * Idiomas o niveles no declarados
+  * Certificaciones o titulos no obtenidos
+  * Empresas o roles que el candidato nunca tuvo
+  * Numeros, porcentajes o metricas falsas (si el perfil dice "optimice proceso" NO inventes "reduje 40% el tiempo")
+  * Anos de experiencia superiores a los reales
+- Si la oferta pide algo que el candidato NO tiene, simplemente NO LO MENCIONES. No inventes para cubrir el gap.
+- Puedes DESTACAR lo que ya hizo, usar palabras de la oferta para describir lo que ya hace, y elegir que experiencia poner primero. PUNTO. Nada mas.
 - IDIOMAS: Solo incluye los idiomas que el candidato realmente maneja. Los idiomas del candidato son: {cv_user_langs_str}. NO inventes niveles de idioma ni agregues idiomas que no esten en esta lista.
+- Si el perfil esta casi vacio (pocos skills, pocas experiencias), NO lo rellenes con datos falsos. Entrega un CV corto y honesto en vez de uno inventado.
 
 CANDIDATO:
 {json.dumps(p, indent=2)}
