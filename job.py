@@ -80,40 +80,7 @@ from jobhunter.storage import load_kb, save_kb
 # ══════════════════════════════════════════════
 # GEMINI
 # ══════════════════════════════════════════════
-def gemini_url(cfg):
-    model = cfg.get("gemini_model", "gemini-2.5-flash")
-    return f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={cfg['gemini_api_key']}"
-
-def _gemini_request(url, payload, max_retries=3):
-    """Make a Gemini API request with retry + exponential backoff for rate limits."""
-    for attempt in range(max_retries):
-        try:
-            r = requests.post(url, json=payload, timeout=60)
-            if r.status_code == 429:  # Rate limit
-                wait = (attempt + 1) * 10  # 10s, 20s, 30s
-                time.sleep(wait)
-                continue
-            if r.status_code >= 500:  # Server error
-                time.sleep(5)
-                continue
-            r.raise_for_status()
-            t = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-            if t.startswith("```"): t = t.split("\n",1)[1].rsplit("```",1)[0]
-            return t
-        except requests.exceptions.Timeout:
-            time.sleep(5)
-            continue
-        except Exception as e:
-            if attempt == max_retries - 1:
-                raise
-            time.sleep(3)
-    raise Exception("Gemini API: max retries exceeded")
-
-def call_gemini(cfg, prompt):
-    return _gemini_request(gemini_url(cfg), {"contents":[{"parts":[{"text":prompt}]}],"generationConfig":{"temperature":0.4}})
-
-def call_gemini_vision(cfg, prompt, img_b64, mime="image/png"):
-    return _gemini_request(gemini_url(cfg), {"contents":[{"parts":[{"text":prompt},{"inline_data":{"mime_type":mime,"data":img_b64}}]}],"generationConfig":{"temperature":0.3}})
+from jobhunter.ai.gemini import gemini_url, call_gemini, call_gemini_vision
 
 
 # ══════════════════════════════════════════════
