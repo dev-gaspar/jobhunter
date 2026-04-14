@@ -1816,46 +1816,16 @@ def parse_time_filter(args):
 
 
 def check_for_updates():
-    """Si hay nueva version, pregunta y/n y actualiza antes de continuar."""
-    # Si el usuario ya esta corriendo 'update', no preguntar
-    if len(sys.argv) > 1 and sys.argv[1] == "update":
-        return
+    """Quick non-blocking check for new commits on remote."""
     try:
         result = subprocess.run(
             ["git", "-C", BASE_DIR, "fetch", "--dry-run"],
             capture_output=True, text=True, timeout=5
         )
+        if result.stderr.strip():
+            console.print("  [yellow]![/yellow] Nueva version disponible → [cyan]jobhunter update[/cyan]\n")
     except Exception:
-        return
-    if not result.stderr.strip():
-        return
-
-    console.print("  [yellow]![/yellow] Nueva version disponible en GitHub")
-    try:
-        choice = Prompt.ask("  Actualizar antes de continuar?", choices=["y", "n"], default="y")
-    except (EOFError, KeyboardInterrupt):
-        console.print()
-        return
-    if choice.lower() != "y":
-        console.print()
-        return
-
-    try:
-        pull = subprocess.run(
-            ["git", "-C", BASE_DIR, "pull", "--ff-only"],
-            capture_output=True, text=True, timeout=30
-        )
-    except Exception as e:
-        console.print(f"  [red]![/red] Error al actualizar: {e}\n")
-        return
-
-    if pull.returncode != 0:
-        console.print(f"  [red]![/red] Error: {pull.stderr.strip()}\n")
-        return
-
-    console.print("  [green]>[/green] Actualizado correctamente")
-    console.print(f"  [cyan]Vuelve a ejecutar:[/cyan] jobhunter {' '.join(sys.argv[1:]) if len(sys.argv) > 1 else ''}\n")
-    sys.exit(0)
+        pass
 
 
 def main():
