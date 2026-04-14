@@ -1,0 +1,29 @@
+{
+  "gemini_api_key": "AIzaFAKEKEY1234567890",
+  "gemini_model": "gemini-2.5-flash",
+  "smtp_email": "test@gmail.com",
+  "smtp_password": "aldgfakepass1234",
+  "cv_path": "/tmp/cv.pdf",
+  "cv_template": "modern",
+  "search_languages": "3",
+  "user_languages": [{"language": "Espanol", "level": "Nativo"}],
+  "work_mode": "1",
+  "work_mode_label": "Remoto",
+  "job_types_raw": "software developer",
+  "search_queries": ["hiring software developer", "enviar CV developer"],
+  "profile": {
+    "name": "Jose Test",
+    "title": "Software Developer",
+    "email": "test@gmail.com",
+    "phone": "+00000000",
+    "location": "Remote",
+    "portfolio": "https://example.com",
+    "linkedin": "https://linkedin.com/in/test",
+    "summary": "Developer con 3 anos de experiencia",
+    "skills": {"backend": ["Python", "FastAPI"], "frontend": ["React"]},
+    "experience": [{"company": "Acme", "role": "Dev", "period": "2022-2024", "description": "Hizo cosas"}],
+    "education": [{"institution": "Uni", "degree": "CS", "period": "2018-2022"}],
+    "projects": [],
+    "achievements": []
+  }
+}
