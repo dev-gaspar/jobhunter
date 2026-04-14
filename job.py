@@ -74,29 +74,8 @@ from src.offer_utils import (
 # ══════════════════════════════════════════════
 # CONFIG & KNOWLEDGE BASE
 # ══════════════════════════════════════════════
-def load_config():
-    if os.path.exists(CONFIG_PATH):
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
-
-def save_config(cfg):
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, indent=2, ensure_ascii=False)
-
-def load_kb():
-    if os.path.exists(KB_PATH):
-        with open(KB_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {"runs": [], "applications": [], "rejected_companies": []}
-
-def save_kb(kb):
-    with open(KB_PATH, "w", encoding="utf-8") as f:
-        json.dump(kb, f, indent=2, ensure_ascii=False)
-
-def is_configured():
-    cfg = load_config()
-    return all(cfg.get(k) for k in ["gemini_api_key", "smtp_email", "smtp_password", "profile"])
+from jobhunter.config import load_config, save_config, is_configured
+from jobhunter.storage import load_kb, save_kb
 
 # ══════════════════════════════════════════════
 # GEMINI
