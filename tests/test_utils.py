@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timedelta
 
-from src.offer_utils import extract_emails, was_already_applied
+from jobhunter.offers import extract_emails, was_already_applied
 
 
 class UtilsTests(unittest.TestCase):

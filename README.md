@@ -1,5 +1,9 @@
 # JobHunter AI
 
+[![CI](https://github.com/dev-gaspar/jobhunter/actions/workflows/ci.yml/badge.svg)](https://github.com/dev-gaspar/jobhunter/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+
 Herramienta CLI que automatiza la busqueda de empleo en LinkedIn. Escanea publicaciones, identifica ofertas relevantes, genera CVs personalizados con IA, y envia emails de aplicacion a reclutadores.
 
 Funciona para cualquier sector: tecnologia, marketing, ventas, diseno, administracion, salud, educacion, etc.
@@ -251,3 +255,11 @@ Se instalan automaticamente la primera vez que ejecutas `jobhunter`.
 ## Landing page
 
 Desplegada automaticamente en GitHub Pages: [https://dev-gaspar.github.io/jobhunter/](https://dev-gaspar.github.io/jobhunter/)
+
+## Contribuir
+
+Las contribuciones son bienvenidas. Lee [CONTRIBUTING.md](./CONTRIBUTING.md) para el flujo de ramas, convenciones de codigo, tests y CI. Resumen: abre features en ramas desde `dev`, PR a `dev`, y solo `dev` se mergea a `main` con CI verde.
+
+## Licencia
+
+MIT - ver [LICENSE](./LICENSE).

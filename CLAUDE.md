@@ -49,10 +49,17 @@ All agents call Gemini via direct HTTP POST (`call_gemini()` / `call_gemini_visi
 
 ### Key Files
 
-- `job.py` — main script, all CLI commands, scraping, agents, email sending
-- `src/cv_builder.py` — CV generation router + ATS text normalization
-- `src/cv_templates/` — 4 PDF templates: modern (default), minimal, classic, compact
-- `src/offer_utils.py` — deduplication, email extraction, cooldown checking
+- `job.py` — entry point shim (~45 lineas): ensure_deps + delega a jobhunter.cli.main
+- `jobhunter/` — paquete modular con toda la logica
+  - `constants.py`, `ui.py`, `banner.py`, `config.py`, `storage.py` — hojas
+  - `ai/base.py` + `ai/gemini.py` — puerto AIProvider + adaptador Gemini
+  - `mailer.py`, `browser.py`, `updater.py`, `scraper.py` — infraestructura
+  - `agents/filter.py`, `agents/cv.py`, `agents/email.py`, `agents/optimizer.py` — 4 agentes
+  - `pipeline.py` — cmd_run (orquestacion de las 3 fases del run)
+  - `cli/main.py` — dispatcher + parse_time_filter
+  - `cli/setup.py` + los demas `cli/*.py` — comandos CLI individuales
+  - `cv/builder.py` + `cv/templates/` — generacion de CV PDF
+  - `offers.py` — deduplicacion, extract_emails, cooldown
 - `config.json` — user config (API keys, SMTP credentials, profile, search queries) — **git-ignored**
 - `knowledge.json` — execution history and application log — **git-ignored**
 - `.session/` — Playwright persistent Chrome session — **git-ignored**
