@@ -70,6 +70,29 @@ feature-xxx --PR--> dev --PR--> main
 5. **Push** y abre un **PR a `dev`** (no a `main`).
 6. Espera a que la CI pase (matriz 3.10-3.13 + smoke). Si falla, revisa los logs y corrige.
 
+## Pre-commit hooks (recomendado)
+
+Instala los hooks una vez para que cada commit corra checks locales:
+
+```
+pip install pre-commit
+pre-commit install              # pre-commit
+pre-commit install -t pre-push  # para correr tests antes de push
+```
+
+Los hooks configurados en [.pre-commit-config.yaml](./.pre-commit-config.yaml):
+
+- **Hygiene**: trailing whitespace, end-of-file, JSON/YAML validos, merge conflicts, no archivos >500KB, no `breakpoint()` olvidado
+- **Ruff**: errores de sintaxis y imports no usados (sin reformatear)
+- **Compile check**: `py_compile` de cada archivo Python cambiado
+- **Unittests en pre-push**: corre la suite antes de cada `git push`
+
+Para correr todos los hooks contra el repo completo:
+
+```
+pre-commit run --all-files
+```
+
 ## Convenciones de codigo
 
 ### Python 3.10 compatibility (CRITICO)
