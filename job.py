@@ -250,16 +250,16 @@ def _mask_secret(value):
 
 
 def _ask_secret(label, current, password=False):
-    """Ask for a secret, showing only a masked preview of the current value.
-    Enter con campo vacio mantiene el valor actual. Devuelve None si '<' (volver)."""
+    """Ask for a secret. Muestra el valor enmascarado en la misma linea del prompt.
+    Enter mantiene el valor actual. Devuelve None si '<' (volver)."""
     if current:
-        console.print(f"  [dim]Valor guardado: {_mask_secret(current)}  (Enter para mantener)[/dim]")
-    val = Prompt.ask(label, password=password, default="")
+        shown_label = f"{label} [dim]({_mask_secret(current)})[/dim]"
+        val = Prompt.ask(shown_label, password=password, default=current, show_default=False)
+    else:
+        val = Prompt.ask(label, password=password, default="")
     val = (val or "").strip().strip('"').strip("'")
     if val == BACK:
         return None
-    if not val:
-        return current or ""
     return val
 
 
