@@ -1853,11 +1853,9 @@ def check_for_updates():
         console.print(f"  [red]![/red] Error: {pull.stderr.strip()}\n")
         return
 
-    console.print("  [green]>[/green] Actualizado. Reiniciando...\n")
-    try:
-        os.execv(sys.executable, [sys.executable] + sys.argv)
-    except Exception:
-        console.print("  [dim]Vuelve a ejecutar el comando para aplicar los cambios.[/dim]\n")
+    console.print("  [green]>[/green] Actualizado correctamente")
+    console.print(f"  [cyan]Vuelve a ejecutar:[/cyan] jobhunter {' '.join(sys.argv[1:]) if len(sys.argv) > 1 else ''}\n")
+    sys.exit(0)
 
 
 def main():
