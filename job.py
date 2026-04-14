@@ -451,7 +451,15 @@ SOLO JSON valido.""", b64, "application/pdf")
                     if not parsed.get("name"):
                         console.print(f"  [red]![/red] El CV parece invalido o la IA no pudo extraer datos. Verifica el PDF.")
                         continue
+                    # Preservar lo que el usuario ingreso manualmente en step_links (portfolio/linkedin)
+                    # Solo usar lo extraido del CV si el usuario no lo ingreso
+                    user_portfolio = profile.get("portfolio", "")
+                    user_linkedin = profile.get("linkedin", "")
                     profile = parsed
+                    if user_portfolio:
+                        profile["portfolio"] = user_portfolio
+                    if user_linkedin:
+                        profile["linkedin"] = user_linkedin
                     cfg["cv_path"] = cv
                     console.print(f"  [green]>[/green] CV leido — {profile.get('name', '?')}")
                     return
