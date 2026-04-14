@@ -1823,7 +1823,8 @@ def check_for_updates():
             capture_output=True, text=True, timeout=5
         )
         if result.stderr.strip():
-            console.print("  [yellow]![/yellow] Nueva version disponible → [cyan]jobhunter update[/cyan]\n")
+            console.print("  [cyan]✦[/cyan] Hay una nueva version disponible con mejoras y nuevas funciones")
+            console.print("    [dim]Actualiza cuando quieras con[/dim] [cyan]jobhunter update[/cyan]\n")
     except Exception:
         pass
 
