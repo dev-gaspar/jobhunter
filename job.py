@@ -88,25 +88,7 @@ from jobhunter.ai.gemini import gemini_url, call_gemini, call_gemini_vision
 # ══════════════════════════════════════════════
 from jobhunter.mailer import send_email
 
-def find_chrome():
-    for p in [
-        os.path.expandvars(r"%ProgramFiles%\Google\Chrome\Application\chrome.exe"),
-        os.path.expandvars(r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"),
-        os.path.expandvars(r"%LocalAppData%\Google\Chrome\Application\chrome.exe"),
-        os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
-        os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"),
-    ]:
-        if os.path.exists(p): return p
-    return shutil.which("chrome") or shutil.which("msedge")
-
-def kill_playwright_zombies():
-    """Kill only leftover Playwright-controlled Chrome instances (not the user's browser)."""
-    # Only kill if .session/SingletonLock exists (means a previous Playwright crashed)
-    lock = os.path.join(SESSION_DIR, "SingletonLock")
-    if os.path.exists(lock):
-        try: os.remove(lock)
-        except: pass
-        time.sleep(1)
+from jobhunter.browser import find_chrome, kill_playwright_zombies
 
 
 # ══════════════════════════════════════════════
