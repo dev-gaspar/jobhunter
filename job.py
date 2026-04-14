@@ -86,27 +86,7 @@ from jobhunter.ai.gemini import gemini_url, call_gemini, call_gemini_vision
 # ══════════════════════════════════════════════
 # EMAIL & UTILS
 # ══════════════════════════════════════════════
-def send_email(cfg, to, subject, body, cv_path=None, max_retries=3):
-    """Send email with retry on failure."""
-    msg = MIMEMultipart()
-    msg["From"] = f"{cfg['profile'].get('name') or 'Candidato'} <{cfg['smtp_email']}>"
-    msg["To"] = to
-    msg["Subject"] = subject
-    msg.attach(MIMEText(body, "plain", "utf-8"))
-    if cv_path and os.path.exists(cv_path):
-        with open(cv_path, "rb") as f:
-            a = MIMEApplication(f.read(), _subtype="pdf")
-            a.add_header("Content-Disposition", "attachment", filename=os.path.basename(cv_path))
-            msg.attach(a)
-    for attempt in range(max_retries):
-        try:
-            with smtplib.SMTP("smtp.gmail.com", 587) as s:
-                s.starttls(); s.login(cfg["smtp_email"], cfg["smtp_password"]); s.send_message(msg)
-            return
-        except Exception as e:
-            if attempt == max_retries - 1:
-                raise
-            time.sleep(3)
+from jobhunter.mailer import send_email
 
 def find_chrome():
     for p in [
