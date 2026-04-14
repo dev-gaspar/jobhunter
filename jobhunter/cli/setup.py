@@ -17,6 +17,10 @@ from jobhunter.constants import BACK, GEMINI_MODELS, SESSION_DIR
 from jobhunter.scraper import do_linkedin_login
 from jobhunter.ui import console
 
+CV_PICKER = "p"
+QUIT = "q"
+MAX_RECENT_CV_PATHS = 5
+
 
 def _setup_screen(current, total, title, subtitle=None):
     """Limpia pantalla y muestra paso con barra de progreso."""
@@ -32,14 +36,18 @@ def _setup_screen(current, total, title, subtitle=None):
     if subtitle:
         console.print(f"  [dim]{subtitle}[/dim]")
     if current > 0:
-        console.print(f"  [dim]Escribe '<' para volver[/dim]")
+        console.print("  [dim]Atajos: (<) volver, (q) salir[/dim]")
+    else:
+        console.print("  [dim]Atajo: (q) salir[/dim]")
     console.print()
 
 
 def _ask(label, **kwargs):
-    """Prompt wrapper que detecta '<' para navegacion back y limpia el input."""
+    """Prompt wrapper con atajos de navegacion y salida."""
     val = Prompt.ask(label, **kwargs)
     val = val.strip().strip('"').strip("'")
+    if val.lower() == QUIT:
+        raise KeyboardInterrupt
     if val == BACK:
         return None
     return val
@@ -66,9 +74,52 @@ def _ask_secret(label, current, password=False):
     else:
         val = Prompt.ask(label, password=password, default="")
     val = (val or "").strip().strip('"').strip("'")
+    if val.lower() == QUIT:
+        raise KeyboardInterrupt
     if val == BACK:
         return None
     return val
+
+
+def _pick_pdf_file(initial_path=""):
+    """Abre selector nativo de archivos PDF y retorna ruta o cadena vacia."""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except Exception:
+        return ""
+
+    initialdir = ""
+    if initial_path:
+        initialdir = initial_path if os.path.isdir(initial_path) else os.path.dirname(initial_path)
+    if not initialdir:
+        initialdir = os.path.expanduser("~")
+
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        root.attributes("-topmost", True)
+    except Exception:
+        pass
+    try:
+        selected = filedialog.askopenfilename(
+            title="Selecciona tu CV en PDF",
+            initialdir=initialdir,
+            filetypes=[("Archivos PDF", "*.pdf"), ("Todos los archivos", "*.*")],
+        )
+    finally:
+        root.destroy()
+    return (selected or "").strip()
+
+
+def _remember_cv_path(cfg, cv_path):
+    """Guarda ruta de CV en historico reciente, sin duplicados."""
+    if not cv_path:
+        return
+    normalized = os.path.normpath(cv_path)
+    existing = [os.path.normpath(path) for path in cfg.get("cv_recent_paths", []) if path]
+    deduped = [path for path in existing if path != normalized]
+    cfg["cv_recent_paths"] = [normalized] + deduped[: MAX_RECENT_CV_PATHS - 1]
 
 
 def cmd_setup():
@@ -235,9 +286,24 @@ def cmd_setup():
     def step_cv():
         _setup_screen(8, TOTAL, "Tu CV actual", "Ruta al archivo PDF \u2014 OBLIGATORIO")
         console.print("  [dim]El CV se lee con IA para extraer tu experiencia real. Sin CV no se puede continuar.[/dim]")
+        recent_paths = cfg.get("cv_recent_paths", [])
+        if recent_paths:
+            console.print("  [dim]Rutas recientes:[/dim]")
+            for index, path in enumerate(recent_paths, 1):
+                console.print(f"  [cyan]{index}.[/cyan] {path}")
+            console.print()
         while True:
-            cv = _ask("  Ruta del CV (.pdf)", default=cfg.get("cv_path", ""))
+            cv = _ask(
+                "  Ruta del CV (.pdf) [dim](Enter=manual, p=selector PDF)[/dim]",
+                default=cfg.get("cv_path", ""),
+            )
             if cv is None: return "back"
+            if cv.lower() == CV_PICKER:
+                picked = _pick_pdf_file(cfg.get("cv_path", ""))
+                if not picked:
+                    console.print("  [yellow]![/yellow] No se selecciono ningun archivo.")
+                    continue
+                cv = picked
             if not cv:
                 console.print("  [red]![/red] El CV es obligatorio. La IA lo usa para adaptar tu experiencia REAL a cada oferta.")
                 continue
@@ -278,6 +344,7 @@ SOLO JSON valido.""", b64, "application/pdf")
                     if user_linkedin:
                         profile["linkedin"] = user_linkedin
                     cfg["cv_path"] = cv
+                    _remember_cv_path(cfg, cv)
                     console.print(f"  [green]>[/green] CV leido \u2014 {profile.get('name', '?')}")
                     return
                 except Exception as e:
