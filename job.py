@@ -48,52 +48,27 @@ from rich import print as rprint
 from playwright.sync_api import sync_playwright
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-GEMINI_MODELS = [
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-pro",
-    "gemini-3-flash-preview",
-    "gemini-3.1-pro-preview",
-    "gemini-3.1-flash-lite-preview",
-]
 sys.path.insert(0, BASE_DIR)
+
+from jobhunter.constants import (
+    BASE_DIR,
+    CONFIG_PATH,
+    SESSION_DIR,
+    KB_PATH,
+    VERSION,
+    GEMINI_MODELS,
+    BANNER_LARGE,
+    BANNER_SMALL,
+)
+from jobhunter.ui import console
+from jobhunter.banner import get_banner
+
 from src.cv_builder import generate_cv_pdf, get_cv_filename
 from src.offer_utils import (
     deduplicate_offers_by_title_company,
     extract_emails,
     was_already_applied,
 )
-
-console = Console()
-CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
-SESSION_DIR = os.path.join(BASE_DIR, ".session")
-KB_PATH = os.path.join(BASE_DIR, "knowledge.json")  # Knowledge base
-
-VERSION = "1.2.0"
-
-BANNER_LARGE = """\
-[bold cyan]
-      ╦╔═╗╔╗  ╦ ╦╦ ╦╔╗╔╔╦╗╔═╗╦═╗
-      ║║ ║╠╩╗ ╠═╣║ ║║║║ ║ ║╣ ╠╦╝
-     ╚╝╚═╝╚═╝ ╩ ╩╚═╝╝╚╝ ╩ ╚═╝╩╚═ [white]AI[/white][/bold cyan]
-[dim]  ──────────────────────────────────────
-  Busqueda de empleo automatizada con IA
-  Playwright + Gemini + Gmail  •  v{version}[/dim]
-"""
-
-BANNER_SMALL = """\
-[bold cyan]  ╦╔═╗╔╗ ╦ ╦╦ ╦╔╗╔╔╦╗╔═╗╦═╗ [white]AI[/white]
-  ║║ ║╠╩╗╠═╣║ ║║║║ ║ ║╣ ╠╦╝
- ╚╝╚═╝╚═╝╩ ╩╚═╝╝╚╝ ╩ ╚═╝╩╚═[/bold cyan]
-[dim]  v{version}[/dim]
-"""
-
-
-def get_banner():
-    width = shutil.get_terminal_size((80, 24)).columns
-    b = BANNER_LARGE if width >= 76 else BANNER_SMALL
-    return b.format(version=VERSION)
 
 
 # ══════════════════════════════════════════════
@@ -725,11 +700,8 @@ def cmd_update():
 # SCRAPING (headless)
 # ══════════════════════════════════════════════
 # LinkedIn time filter URL params
-TIME_FILTERS = {
-    "24h": "past-24h",
-    "week": "past-week",
-    "month": "past-month",
-}
+from jobhunter.constants import TIME_FILTERS
+
 
 def scrape_posts(page, query, max_scroll=4, time_filter="24h"):
     encoded = urllib.parse.quote(query)
