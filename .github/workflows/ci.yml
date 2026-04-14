@@ -26,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install rich requests playwright reportlab
+          pip install -r requirements.txt
 
       - name: Compile check (catches f-string bugs on Py 3.10)
         run: |
@@ -46,7 +46,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install rich requests playwright reportlab
+      - run: pip install -r requirements.txt
       - name: CLI does not crash
         run: |
           python job.py --help
