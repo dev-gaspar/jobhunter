@@ -567,41 +567,7 @@ def cmd_status():
 # ══════════════════════════════════════════════
 # UPDATE
 # ══════════════════════════════════════════════
-def cmd_update():
-    console.print(get_banner())
-
-    with console.status("  [dim]Buscando actualizaciones...[/dim]"):
-        try:
-            result = subprocess.run(
-                ["git", "-C", BASE_DIR, "pull", "--ff-only"],
-                capture_output=True, text=True, timeout=30
-            )
-        except FileNotFoundError:
-            console.print("  [red]✗[/red] git no esta instalado")
-            return
-        except subprocess.TimeoutExpired:
-            console.print("  [red]✗[/red] Timeout al conectar con GitHub")
-            return
-
-    if result.returncode != 0:
-        console.print(f"  [red]✗[/red] Error: {result.stderr.strip()}")
-        return
-
-    output = result.stdout.strip()
-    if "Already up to date" in output or "Ya esta actualizado" in output:
-        console.print("  [green]✓[/green] Ya tienes la ultima version")
-    else:
-        console.print("  [green]✓[/green] Actualizado correctamente")
-        console.print(f"    [dim]{output}[/dim]")
-
-    with console.status("  [dim]Verificando dependencias...[/dim]"):
-        subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--quiet", "rich", "requests", "playwright", "reportlab"],
-            capture_output=True
-        )
-
-    console.print("  [green]✓[/green] Dependencias al dia")
-    console.print()
+from jobhunter.updater import cmd_update, check_for_updates
 
 
 # ══════════════════════════════════════════════
@@ -1693,20 +1659,6 @@ def parse_time_filter(args):
                 console.print(f"  [red]✗[/red] Filtro invalido: {val}  [dim](opciones: 24h, week, month)[/dim]")
                 sys.exit(1)
     return "24h"
-
-
-def check_for_updates():
-    """Quick non-blocking check for new commits on remote."""
-    try:
-        result = subprocess.run(
-            ["git", "-C", BASE_DIR, "fetch", "--dry-run"],
-            capture_output=True, text=True, timeout=5
-        )
-        if result.stderr.strip():
-            console.print("  [cyan]✦[/cyan] Hay una nueva version disponible con mejoras y nuevas funciones")
-            console.print("    [dim]Actualiza cuando quieras con[/dim] [cyan]jobhunter update[/cyan]\n")
-    except Exception:
-        pass
 
 
 def main():
