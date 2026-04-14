@@ -239,6 +239,30 @@ def _ask(label, **kwargs):
     return val
 
 
+def _mask_secret(value):
+    """Return a masked preview of a secret, showing only the first chars."""
+    if not value:
+        return ""
+    v = str(value)
+    if len(v) <= 4:
+        return "***"
+    return v[:4] + "***"
+
+
+def _ask_secret(label, current, password=False):
+    """Ask for a secret, showing only a masked preview of the current value.
+    Enter con campo vacio mantiene el valor actual. Devuelve None si '<' (volver)."""
+    if current:
+        console.print(f"  [dim]Valor guardado: {_mask_secret(current)}  (Enter para mantener)[/dim]")
+    val = Prompt.ask(label, password=password, default="")
+    val = (val or "").strip().strip('"').strip("'")
+    if val == BACK:
+        return None
+    if not val:
+        return current or ""
+    return val
+
+
 def cmd_setup():
     cfg = load_config()
     profile = cfg.get("profile", {})
@@ -339,7 +363,7 @@ def cmd_setup():
     def step_gemini():
         _setup_screen(6, TOTAL, "Gemini AI", "Obtiene la clave gratis en https://aistudio.google.com/apikey")
         while True:
-            key = _ask("  Clave API", default=cfg.get("gemini_api_key", ""))
+            key = _ask_secret("  Clave API", cfg.get("gemini_api_key", ""))
             if key is None: return "back"
             if not key: console.print("  [red]Obligatoria.[/red]"); continue
             key = key.replace(" ", "")
@@ -373,9 +397,9 @@ def cmd_setup():
             if email is None: return "back"
             if not re.match(r'^[^@]+@gmail\.com$', email):
                 console.print("  [red]![/red] Debe ser @gmail.com"); continue
-            pwd = Prompt.ask("  Contrasena de app", default=cfg.get("smtp_password",""), password=True)
-            pwd = pwd.strip().replace(" ", "")
-            if pwd == BACK: return "back"
+            pwd = _ask_secret("  Contrasena de app", cfg.get("smtp_password", ""), password=True)
+            if pwd is None: return "back"
+            pwd = pwd.replace(" ", "")
             if not pwd or len(pwd) < 10:
                 console.print("  [red]![/red] Minimo 16 caracteres"); continue
             with console.status("  [dim]Verificando SMTP...[/dim]"):
@@ -1784,16 +1808,48 @@ def parse_time_filter(args):
 
 
 def check_for_updates():
-    """Quick non-blocking check for new commits on remote."""
+    """Si hay nueva version, pregunta y/n y actualiza antes de continuar."""
+    # Si el usuario ya esta corriendo 'update', no preguntar
+    if len(sys.argv) > 1 and sys.argv[1] == "update":
+        return
     try:
         result = subprocess.run(
             ["git", "-C", BASE_DIR, "fetch", "--dry-run"],
             capture_output=True, text=True, timeout=5
         )
-        if result.stderr.strip():
-            console.print("  [yellow]![/yellow] Nueva version disponible → [cyan]jobhunter update[/cyan]\n")
     except Exception:
-        pass
+        return
+    if not result.stderr.strip():
+        return
+
+    console.print("  [yellow]![/yellow] Nueva version disponible en GitHub")
+    try:
+        choice = Prompt.ask("  Actualizar antes de continuar?", choices=["y", "n"], default="y")
+    except (EOFError, KeyboardInterrupt):
+        console.print()
+        return
+    if choice.lower() != "y":
+        console.print()
+        return
+
+    try:
+        pull = subprocess.run(
+            ["git", "-C", BASE_DIR, "pull", "--ff-only"],
+            capture_output=True, text=True, timeout=30
+        )
+    except Exception as e:
+        console.print(f"  [red]![/red] Error al actualizar: {e}\n")
+        return
+
+    if pull.returncode != 0:
+        console.print(f"  [red]![/red] Error: {pull.stderr.strip()}\n")
+        return
+
+    console.print("  [green]>[/green] Actualizado. Reiniciando...\n")
+    try:
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+    except Exception:
+        console.print("  [dim]Vuelve a ejecutar el comando para aplicar los cambios.[/dim]\n")
 
 
 def main():
