@@ -7,7 +7,7 @@ from reportlab.lib.colors import HexColor
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
-from src.cv_builder import _safe, SECTION_LABELS, safe_header_name
+from jobhunter.cv.builder import _safe, SECTION_LABELS, safe_header_name
 
 PRIMARY = HexColor("#333333")
 TEXT_DARK = HexColor("#444444")

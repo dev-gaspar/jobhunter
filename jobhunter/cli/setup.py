@@ -74,7 +74,7 @@ def _ask_secret(label, current, password=False):
 def cmd_setup():
     cfg = load_config()
     profile = cfg.get("profile", {})
-    from src.cv_templates import TEMPLATES, DEFAULT_TEMPLATE
+    from jobhunter.cv.templates import TEMPLATES, DEFAULT_TEMPLATE
 
     lang_options = {"1": "Espanol", "2": "Ingles", "3": "Espanol e Ingles"}
     mode_options = {"1": "Remoto", "2": "Hibrido", "3": "Presencial", "4": "Cualquiera"}

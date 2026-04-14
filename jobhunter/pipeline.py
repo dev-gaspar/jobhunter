@@ -17,8 +17,8 @@ from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeEl
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
-from src.cv_builder import generate_cv_pdf, get_cv_filename
-from src.offer_utils import (
+from jobhunter.cv.builder import generate_cv_pdf, get_cv_filename
+from jobhunter.offers import (
     deduplicate_offers_by_title_company,
     extract_emails,
     was_already_applied,

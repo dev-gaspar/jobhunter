@@ -3,7 +3,7 @@
 import json
 
 from jobhunter.ai.gemini import call_gemini, call_gemini_vision
-from src.offer_utils import extract_emails
+from jobhunter.offers import extract_emails
 
 
 def agent_filter(cfg, text, ss=None):

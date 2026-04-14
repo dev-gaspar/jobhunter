@@ -1,9 +1,9 @@
 """CV Template registry — each template exports a generate() function."""
 
-from src.cv_templates.modern import generate as modern_generate
-from src.cv_templates.minimal import generate as minimal_generate
-from src.cv_templates.classic import generate as classic_generate
-from src.cv_templates.compact import generate as compact_generate
+from jobhunter.cv.templates.modern import generate as modern_generate
+from jobhunter.cv.templates.minimal import generate as minimal_generate
+from jobhunter.cv.templates.classic import generate as classic_generate
+from jobhunter.cv.templates.compact import generate as compact_generate
 
 TEMPLATES = {
     "modern": {"name": "Modern", "description": "Limpio con acentos de color", "generate": modern_generate},

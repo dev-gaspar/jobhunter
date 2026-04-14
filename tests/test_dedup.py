@@ -1,6 +1,6 @@
 import unittest
 
-from src.offer_utils import deduplicate_offers_by_title_company
+from jobhunter.offers import deduplicate_offers_by_title_company
 
 
 class DeduplicationTests(unittest.TestCase):

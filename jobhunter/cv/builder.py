@@ -66,7 +66,7 @@ def generate_cv_pdf(
     template: str = "modern",
 ):
     """Generate a professional PDF CV using the specified template."""
-    from src.cv_templates import get_template
+    from jobhunter.cv.templates import get_template
     tmpl = get_template(template)
     return tmpl["generate"](cv_data, profile, output_path, job_title, company, language)
 
