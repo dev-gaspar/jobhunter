@@ -1,0 +1,12 @@
+{
+  "runs": [
+    {"date": "2026-04-10T10:00:00", "posts": 50, "offers": 8, "sent": 3, "mode": "run"},
+    {"date": "2026-04-12T09:30:00", "posts": 40, "offers": 6, "sent": 2, "mode": "run"}
+  ],
+  "applications": [
+    {"date": "2026-04-10T10:05:00", "company": "Acme", "job_title": "Backend Dev", "email": "hr@acme.com", "mode": "run"},
+    {"date": "2026-04-10T10:07:00", "company": "Globex", "job_title": "Full Stack", "email": "jobs@globex.com", "mode": "run"},
+    {"date": "2026-04-12T09:33:00", "company": "Initech", "job_title": "Python Eng", "email": "talent@initech.com", "mode": "test"}
+  ],
+  "rejected_companies": ["BadCorp"]
+}
