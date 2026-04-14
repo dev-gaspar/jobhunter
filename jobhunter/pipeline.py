@@ -182,6 +182,22 @@ def cmd_run(
                 "contact_email": a.get("contact_email"),
             })
 
+            # Mostrar decision inline encima del progress para que el usuario vea
+            # que analiza y por que acepta/rechaza cada post.
+            company = (a.get("company") or "").strip()
+            title = (a.get("job_title") or "").strip()
+            reason = (a.get("relevance_reason") or "").strip()
+            if a.get("is_job") and a.get("is_relevant", True):
+                label = f"    [green]\u2713[/green] {company or '-'} [dim]\u2014[/dim] {title or '-'}"
+            elif a.get("is_job"):
+                short = reason[:90] or "no relevante"
+                head = f"{company or '-'} \u2014 {title or '-'}" if (company or title) else "oferta no relevante"
+                label = f"    [yellow]\u2013[/yellow] [dim]{head}[/dim] [yellow]\u00b7[/yellow] [yellow]{short}[/yellow]"
+            else:
+                short = reason[:100] or "no es oferta"
+                label = f"    [dim red]\u2717[/dim red] [dim]{short}[/dim]"
+            console.print(label)
+
             if a.get("is_job") and a.get("is_relevant", True):
                 a["job_title"] = a.get("job_title") or "Software Developer"
                 a["company"] = a.get("company") or "Empresa"
