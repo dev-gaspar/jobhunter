@@ -174,7 +174,7 @@ python -m unittest tests.test_agents_cv -v
 - `.github/workflows/ci.yml` corre en cada push a `dev` y cada PR a `main` o `dev`.
 - Matriz Python 3.10/3.11/3.12/3.13 — los 4 deben pasar.
 - Job extra `block-direct-push-to-main` falla si alguien empuja directo a `main`.
-- La proteccion dura esta en GitHub Settings > Branches (requiere PR, CI verde, 1 aprobacion).
+- La proteccion esta activa en GitHub: **push directo a `main` rechazado**, merge solo via PR, CI verde obligatoria (los 5 checks: Tests 3.10-3.13 + Smoke), rama al dia con `main` antes de mergear, force-push y deleciones bloqueadas.
 
 ## Puntos de extension comunes
 
