@@ -147,6 +147,7 @@ def cmd_run(
     console.print()
     console.print("  [bold dim]Analizando ofertas...[/bold dim]")
     offers = []
+    filter_decisions = []  # cada decision del agent_filter incluye relevance_reason
 
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
                   BarColumn(), TextColumn("{task.completed}/{task.total}"),
@@ -154,9 +155,49 @@ def cmd_run(
         task = prog.add_task("Analizando...", total=len(posts_with_emails))
         for post in posts_with_emails:
             if len(post.get("text","")) < 50:
+                filter_decisions.append({
+                    "post_url": post.get("post_url"),
+                    "post_preview": post.get("text", "")[:200],
+                    "is_job": False,
+                    "is_relevant": False,
+                    "relevance_reason": "skipped (text < 50 chars)",
+                })
                 prog.advance(task); continue
             ss = post.get("screenshots",[None])[0] if post.get("screenshots") else None
             a = agent_filter(cfg, post["text"], ss)
+
+            # Registrar TODAS las decisiones (aceptadas y rechazadas) para poder
+            # diagnosticar por que el filter esta descartando tanto. Sin esto el
+            # usuario ve 274 posts -> 1 oferta y no sabe que paso con los 273.
+            filter_decisions.append({
+                "post_url": post.get("post_url"),
+                "post_preview": post.get("text", "")[:200],
+                "is_job": bool(a.get("is_job")),
+                "is_relevant": bool(a.get("is_relevant", True)),
+                "relevance_reason": a.get("relevance_reason", ""),
+                "job_title": a.get("job_title"),
+                "company": a.get("company"),
+                "language": a.get("language"),
+                "work_mode": a.get("work_mode"),
+                "contact_email": a.get("contact_email"),
+            })
+
+            # Mostrar decision inline encima del progress para que el usuario vea
+            # que analiza y por que acepta/rechaza cada post.
+            company = (a.get("company") or "").strip()
+            title = (a.get("job_title") or "").strip()
+            reason = (a.get("relevance_reason") or "").strip()
+            if a.get("is_job") and a.get("is_relevant", True):
+                label = f"    [green]\u2713[/green] {company or '-'} [dim]\u2014[/dim] {title or '-'}"
+            elif a.get("is_job"):
+                short = reason[:90] or "no relevante"
+                head = f"{company or '-'} \u2014 {title or '-'}" if (company or title) else "oferta no relevante"
+                label = f"    [yellow]\u2013[/yellow] [dim]{head}[/dim] [yellow]\u00b7[/yellow] [yellow]{short}[/yellow]"
+            else:
+                short = reason[:100] or "no es oferta"
+                label = f"    [dim red]\u2717[/dim red] [dim]{short}[/dim]"
+            console.print(label)
+
             if a.get("is_job") and a.get("is_relevant", True):
                 a["job_title"] = a.get("job_title") or "Software Developer"
                 a["company"] = a.get("company") or "Empresa"
@@ -495,7 +536,29 @@ def cmd_run(
 
     log = os.path.join(BASE_DIR, "output", "logs", f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
     os.makedirs(os.path.dirname(log), exist_ok=True)
+    # Resumen por razon de rechazo para diagnostico rapido
+    reject_reasons = {}
+    for d in filter_decisions:
+        if not (d.get("is_job") and d.get("is_relevant", True)):
+            reason = d.get("relevance_reason") or "(sin razon)"
+            reject_reasons[reason] = reject_reasons.get(reason, 0) + 1
+    log_data = {
+        "run_date": datetime.now().isoformat(),
+        "mode": mode,
+        "stats": {
+            "posts_scraped": len(all_posts),
+            "posts_with_emails": len(posts_with_emails),
+            "filter_accepted": len(offers),
+            "filter_rejected": len(filter_decisions) - len(offers),
+            "reject_reasons_top": dict(sorted(reject_reasons.items(), key=lambda x: -x[1])[:10]),
+            "applications_attempted": len(results),
+            "sent": sent,
+            "errors": errors,
+        },
+        "filter_decisions": filter_decisions,
+        "applications": results,
+    }
     with open(log, "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2, ensure_ascii=False)
+        json.dump(log_data, f, indent=2, ensure_ascii=False)
 
 
