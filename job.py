@@ -1002,6 +1002,8 @@ def cmd_run(
 # OPTIMIZE (AI agent for search query optimization)
 # ══════════════════════════════════════════════
 def cmd_optimize(user_prompt=None):
+    from jobhunter.agents.optimizer import optimize_queries
+
     cfg = load_config()
     kb = load_kb()
 
@@ -1014,85 +1016,10 @@ def cmd_optimize(user_prompt=None):
     console.print("  [bold dim]Optimizando queries de busqueda...[/bold dim]")
     console.print()
 
-    profile = cfg.get("profile", {})
     current_queries = cfg.get("search_queries", [])
-    job_types = cfg.get("job_types_raw", "")
-    lang = cfg.get("search_languages", "3")
-    work_mode = cfg.get("work_mode_label", "Cualquiera")
-    location = cfg.get("user_location", "")
-
-    lang_labels = {"1": "Espanol", "2": "Ingles", "3": "Espanol e Ingles"}
-    lang_label = lang_labels.get(lang, "Espanol e Ingles")
-
-    # Build context from knowledge base
-    runs = kb.get("runs", [])
-    apps = kb.get("applications", [])
-    run_stats = ""
-    if runs:
-        total_posts = sum(r.get("posts", 0) for r in runs)
-        total_offers = sum(r.get("offers", 0) for r in runs)
-        total_sent = sum(r.get("sent", 0) for r in runs)
-        run_stats = f"""
-HISTORIAL DE EJECUCIONES ({len(runs)} ejecuciones):
-- Posts scrapeados en total: {total_posts}
-- Ofertas encontradas en total: {total_offers}
-- Emails enviados en total: {total_sent}
-- Tasa de conversion posts→ofertas: {(total_offers/total_posts*100):.1f}% (idealmente >15%)
-- Tasa de conversion posts→enviados: {(total_sent/total_posts*100):.1f}%"""
-
-    applied_titles = ""
-    if apps:
-        titles = list(set(a.get("job_title", "") for a in apps[-30:]))
-        applied_titles = f"\nPUESTOS A LOS QUE YA APLICO (ultimos 30): {', '.join(titles[:15])}"
-
-    user_context = ""
-    if user_prompt:
-        user_context = f"""
-FEEDBACK DEL USUARIO (prioridad maxima, atender esto):
-"{user_prompt}"
-"""
-
-    prompt = f"""ROLE: Eres un agente experto en busqueda de empleo en LinkedIn. Tu trabajo es optimizar las queries de busqueda para maximizar la cantidad de ofertas REALES con email de reclutador encontradas.
-
-CONTEXTO DEL CANDIDATO:
-- Nombre: {profile.get('name', '?')}
-- Titulo: {profile.get('title', '?')}
-- Busca empleo como: {job_types}
-- Habilidades: {json.dumps(profile.get('skills', {})) if isinstance(profile.get('skills'), dict) else str(profile.get('skills', ''))[:500]}
-- Experiencia reciente: {json.dumps(profile.get('experience', [])[:2]) if profile.get('experience') else 'N/A'}
-- Idiomas de busqueda: {lang_label}
-- Modalidad: {work_mode}
-{f'- Ubicacion: {location}' if location else ''}
-
-QUERIES ACTUALES ({len(current_queries)}):
-{json.dumps(current_queries, indent=2)}
-{run_stats}
-{applied_titles}
-{user_context}
-
-INSTRUCCIONES:
-1. Analiza las queries actuales y determina por que pueden estar dando pocos resultados
-2. Genera queries OPTIMIZADAS que:
-   - Usen terminos que los reclutadores REALMENTE usan en LinkedIn cuando publican ofertas
-   - Incluyan variaciones naturales (abreviaciones, sinonimos, terminos de la industria)
-   - Cubran tanto posts de reclutadores como de hiring managers
-   - Sean especificas al perfil pero no tan nicho que no encuentren nada
-   - Incluyan frases que impliquen que hay email de contacto ("enviar CV a", "send resume to", "apply via email")
-   - Consideren la modalidad de trabajo ({work_mode})
-   {'- SOLO en espanol' if lang == '1' else '- SOLO en ingles' if lang == '2' else '- En espanol Y en ingles'}
-3. NO repitas las mismas queries con minimas variaciones
-4. Apunta a 15-25 queries totales (suficientes para cubrir variaciones, no tantas que sea lento)
-5. Cada query debe ser de 3-6 palabras (asi funciona mejor en LinkedIn search)
-
-JSON (sin markdown, sin bloques de codigo):
-{{"analysis": "analisis breve de por que las queries actuales pueden ser suboptimas", "queries": ["query1", "query2", ...], "changes_summary": "resumen de 2-3 lineas de que cambio y por que"}}"""
 
     with console.status("  [dim]Analizando y generando queries optimizadas...[/dim]"):
-        try:
-            result = json.loads(call_gemini(cfg, prompt))
-        except Exception as e:
-            console.print(f"  [red]✗[/red] Error al generar queries: {e}")
-            return
+        result = optimize_queries(cfg, kb, user_prompt=user_prompt)
 
     new_queries = result.get("queries", [])
     analysis = result.get("analysis", "")
