@@ -5,6 +5,35 @@ import json
 from jobhunter.ai.gemini import call_gemini
 
 
+def build_query_stats(applications, top=15):
+    """Bloque de rendimiento por query (enviados/respuestas) para el prompt.
+
+    Solo considera aplicaciones etiquetadas con query (las nuevas); retorna
+    cadena vacia si no hay datos aun.
+    """
+    stats = {}
+    for a in applications or []:
+        q = a.get("query")
+        if not q:
+            continue
+        s = stats.setdefault(q, {"sent": 0, "replied": 0})
+        s["sent"] += 1
+        if a.get("status") == "replied":
+            s["replied"] += 1
+    if not stats:
+        return ""
+    rows = sorted(stats.items(), key=lambda kv: (-kv[1]["replied"], -kv[1]["sent"]))[:top]
+    lines = [
+        '- "' + q + '": ' + str(v["sent"]) + " enviados, " + str(v["replied"]) + " respuestas"
+        for q, v in rows
+    ]
+    return (
+        "\nRENDIMIENTO REAL POR QUERY (aplicaciones enviadas y respuestas de reclutadores):\n"
+        + "\n".join(lines)
+        + "\n- Conserva y expande los patrones de las queries CON respuestas; descarta o reformula los patrones con envios y cero respuestas."
+    )
+
+
 def optimize_queries(cfg, kb, user_prompt=None):
     """Genera queries optimizadas a partir del perfil, queries actuales y metricas de historial.
 
@@ -44,6 +73,8 @@ def optimize_queries(cfg, kb, user_prompt=None):
         titles = list(set(a.get("job_title", "") for a in apps[-30:]))
         applied_titles = f"\nPUESTOS A LOS QUE YA APLICO (ultimos 30): {', '.join(titles[:15])}"
 
+    query_stats = build_query_stats(apps)
+
     user_context = ""
     if user_prompt:
         user_context = (
@@ -74,6 +105,7 @@ CONTEXTO DEL CANDIDATO:
 QUERIES ACTUALES ({len(current_queries)}):
 {queries_json}
 {run_stats}
+{query_stats}
 {applied_titles}
 {user_context}
 

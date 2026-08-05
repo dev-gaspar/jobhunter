@@ -72,5 +72,44 @@ class OptimizerTests(unittest.TestCase):
         self.assertNotIn("HISTORIAL", prompt)
 
 
+class QueryStatsTests(unittest.TestCase):
+    def _apps(self):
+        return [
+            {"query": "Vacante IA remoto", "status": "replied"},
+            {"query": "Vacante IA remoto", "status": "no_reply"},
+            {"query": "Backend remoto CV", "status": "no_reply"},
+            {"query": None, "status": "replied"},
+            {"status": "replied"},
+        ]
+
+    def test_stats_sorted_by_replies(self):
+        from jobhunter.agents.optimizer import build_query_stats
+        block = build_query_stats(self._apps())
+        self.assertIn("RENDIMIENTO REAL POR QUERY", block)
+        self.assertIn("Vacante IA remoto", block)
+        self.assertIn("2 enviados, 1 respuestas", block)
+        self.assertLess(block.index("Vacante IA remoto"), block.index("Backend remoto CV"))
+
+    def test_empty_when_no_tagged_apps(self):
+        from jobhunter.agents.optimizer import build_query_stats
+        self.assertEqual(build_query_stats([{"status": "replied"}]), "")
+        self.assertEqual(build_query_stats([]), "")
+
+    @patch("jobhunter.agents.optimizer.call_gemini")
+    def test_prompt_includes_query_stats_when_available(self, mock_call):
+        mock_call.return_value = json.dumps({"queries": []})
+        kb = {"runs": [], "applications": self._apps()}
+        optimize_queries(CFG, kb)
+        prompt = mock_call.call_args.args[1]
+        self.assertIn("RENDIMIENTO REAL POR QUERY", prompt)
+
+    @patch("jobhunter.agents.optimizer.call_gemini")
+    def test_prompt_omits_query_stats_without_data(self, mock_call):
+        mock_call.return_value = json.dumps({"queries": []})
+        optimize_queries(CFG, {"runs": [], "applications": []})
+        prompt = mock_call.call_args.args[1]
+        self.assertNotIn("RENDIMIENTO REAL POR QUERY", prompt)
+
+
 if __name__ == "__main__":
     unittest.main()
