@@ -3,6 +3,7 @@
 import sys
 
 from jobhunter.banner import get_banner
+from jobhunter.cli.apply import cmd_apply
 from jobhunter.cli.blacklist import cmd_blacklist
 from jobhunter.cli.help import cmd_help
 from jobhunter.cli.login import cmd_login
@@ -78,6 +79,13 @@ def main():
         action = sys.argv[2] if len(sys.argv) > 2 else None
         company = sys.argv[3] if len(sys.argv) > 3 else None
         cmd_blacklist(action, company)
+    elif cmd in ("apply",):
+        arg = sys.argv[2] if len(sys.argv) > 2 and not sys.argv[2].startswith("--") else None
+        apply_test = None
+        for i, a in enumerate(sys.argv):
+            if a == "--test" and i + 1 < len(sys.argv):
+                apply_test = sys.argv[i + 1]
+        cmd_apply(arg, test_email=apply_test, dry_run=dry)
     elif cmd in ("status",):
         cmd_status()
     elif cmd in ("update",):
