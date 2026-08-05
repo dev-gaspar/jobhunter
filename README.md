@@ -34,6 +34,10 @@ jobhunter run                            Buscar y enviar a reclutadores
 jobhunter run --dry                      Pipeline completo sin enviar emails
 jobhunter optimize                       Optimizar queries de busqueda con IA
 jobhunter optimize "..."                 Optimizar con feedback especifico
+jobhunter apply [link|"texto"]           Aplicar a una publicacion puntual
+jobhunter apply                          Modo pegar texto (termina con '.')
+jobhunter dashboard                      Dashboard local de historial y metricas
+jobhunter sync                           Conciliar respuestas y rebotes (Gmail IMAP)
 jobhunter history                        Historial de aplicaciones enviadas
 jobhunter blacklist                      Ver empresas bloqueadas
 jobhunter blacklist add "Empresa"        Bloquear empresa
