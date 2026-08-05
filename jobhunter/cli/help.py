@@ -22,6 +22,7 @@ def cmd_help():
     cmds.add_row("jobhunter apply [link|texto]", "Aplicar a una publicacion puntual")
     cmds.add_row("jobhunter dashboard", "Dashboard local de historial y metricas")
     cmds.add_row("jobhunter sync", "Conciliar respuestas y rebotes (Gmail IMAP)")
+    cmds.add_row("jobhunter network", "Conectar con reclutadores ya contactados")
     cmds.add_row("jobhunter history", "Historial de aplicaciones")
     cmds.add_row("jobhunter blacklist", "Ver/agregar/quitar empresas bloqueadas")
     cmds.add_row("jobhunter status", "Ver configuracion y estadisticas")

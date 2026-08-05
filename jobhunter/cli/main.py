@@ -6,6 +6,7 @@ from jobhunter.banner import get_banner
 from jobhunter.cli.apply import cmd_apply
 from jobhunter.cli.blacklist import cmd_blacklist
 from jobhunter.cli.dashboard import cmd_dashboard
+from jobhunter.cli.network import cmd_network
 from jobhunter.cli.sync import cmd_sync
 from jobhunter.cli.help import cmd_help
 from jobhunter.cli.login import cmd_login
@@ -106,6 +107,8 @@ def main():
                 except ValueError:
                     pass
         cmd_sync(days=days)
+    elif cmd in ("network",):
+        cmd_network()
     elif cmd in ("status",):
         cmd_status()
     elif cmd in ("update",):

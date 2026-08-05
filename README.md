@@ -38,6 +38,7 @@ jobhunter apply [link|"texto"]           Aplicar a una publicacion puntual
 jobhunter apply                          Modo pegar texto (termina con '.')
 jobhunter dashboard                      Dashboard local de historial y metricas
 jobhunter sync                           Conciliar respuestas y rebotes (Gmail IMAP)
+jobhunter network                        Conectar con reclutadores ya contactados
 jobhunter history                        Historial de aplicaciones enviadas
 jobhunter blacklist                      Ver empresas bloqueadas
 jobhunter blacklist add "Empresa"        Bloquear empresa
