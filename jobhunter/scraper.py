@@ -103,7 +103,17 @@ def scrape_posts(page, query, max_scroll=4, time_filter="24h"):
             if (seen.has(key)) return;
             seen.add(key);
             const emails = [...new Set((text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g) || []))];
-            posts.push({text: text.substring(0, 4000), emails_found: emails, index: idx});
+            let author_url = null, author_name = null;
+            const item = box.closest('[role="listitem"]');
+            if (item) {
+                const a = item.querySelector('a[href*="/in/"]');
+                if (a) {
+                    author_url = (a.href || '').split('?')[0] || null;
+                    author_name = ((a.innerText || '').split('\n')[0] || '').trim() || null;
+                }
+            }
+            posts.push({text: text.substring(0, 4000), emails_found: emails, index: idx,
+                        author_url, author_name});
         });
         return posts;
     }""")
