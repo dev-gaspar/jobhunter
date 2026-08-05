@@ -83,6 +83,7 @@ def cmd_run(
             browser = p.chromium.launch_persistent_context(
                 user_data_dir=SESSION_DIR, headless=True,
                 viewport={"width":1300,"height":850}, executable_path=chrome,
+                permissions=["clipboard-read", "clipboard-write"],
             )
             page = browser.pages[0] if browser.pages else browser.new_page()
             page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded")
@@ -249,7 +250,7 @@ def cmd_run(
         if extra_wide:
             table.add_column("Salario", max_width=18, style="green")
         table.add_column("Email", max_width=26 if wide else 22, style="cyan")
-        table.add_column("Post", width=6, justify="center")
+        table.add_column("Post", max_width=20 if wide else 6, justify="left" if wide else "center")
         mode_icons = {"remote": "[green]Remoto[/green]", "hybrid": "[yellow]Hibrido[/yellow]", "onsite": "[red]Onsite[/red]", "unknown": "[dim]—[/dim]"}
         for i, o in enumerate(offers_with_email, 1):
             wm = mode_icons.get(o.get("work_mode", "unknown"), "[dim]—[/dim]")
@@ -260,7 +261,11 @@ def cmd_run(
             salary = o.get("salary") or "—"
             if str(salary).lower() in ("null", "none", "n/a", "no mencionado", "no especificado"):
                 salary = "—"
-            post_link = f"[link={o['post_url']}]Ver[/link]" if o.get("post_url") else "[dim]—[/dim]"
+            if o.get("post_url"):
+                shown = o["post_url"].replace("https://", "") if wide else "Ver"
+                post_link = f"[link={o['post_url']}]{shown}[/link]"
+            else:
+                post_link = "[dim]—[/dim]"
             if extra_wide:
                 table.add_row(str(i), o["job_title"][:28], o["company"][:16], wm, loc[:18], la, str(salary)[:18], o["contact_email"], post_link)
             elif wide:
