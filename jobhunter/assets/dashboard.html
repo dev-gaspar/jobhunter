@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JobHunter — Dashboard</title>
+<style>
+  :root {
+    --bg: #121214; --card: #1b1b1f; --border: #2a2a30;
+    --text: #e4e4e7; --dim: #8b8b93; --teal: #2dd4bf; --teal-dark: #0d9488;
+    --green: #4ade80; --red: #f87171; --yellow: #facc15;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+    padding: 2rem 1rem; max-width: 1080px; margin: 0 auto;
+  }
+  h1 { font-size: 1.4rem; letter-spacing: .02em; }
+  h1 span { color: var(--teal); }
+  .sub { color: var(--dim); font-size: .8rem; margin-bottom: 1.6rem; }
+  h2 { font-size: .95rem; color: var(--dim); text-transform: uppercase;
+       letter-spacing: .08em; margin: 2rem 0 .8rem; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .8rem; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.2rem; }
+  .card .num { font-size: 1.9rem; font-weight: 600; }
+  .card .lbl { color: var(--dim); font-size: .78rem; margin-top: .15rem; }
+  .card .rate { font-size: .78rem; margin-top: .3rem; }
+  .bars { display: flex; align-items: flex-end; gap: 6px; height: 120px;
+          background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; }
+  .bar { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; height: 100%; }
+  .bar .fill { width: 100%; background: linear-gradient(180deg, var(--teal), var(--teal-dark));
+               border-radius: 3px 3px 0 0; min-height: 2px; }
+  .bar .wk { color: var(--dim); font-size: .6rem; white-space: nowrap; }
+  .bar .n { color: var(--text); font-size: .68rem; }
+  table { width: 100%; border-collapse: collapse; background: var(--card);
+          border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: .55rem .8rem; font-size: .8rem; }
+  th { color: var(--dim); font-weight: 500; border-bottom: 1px solid var(--border);
+       text-transform: uppercase; font-size: .68rem; letter-spacing: .06em; }
+  tr + tr td { border-top: 1px solid var(--border); }
+  td.dim { color: var(--dim); }
+  .pill { display: inline-block; padding: .1rem .55rem; border-radius: 999px;
+          font-size: .68rem; border: 1px solid; }
+  .st-replied  { color: var(--green);  border-color: var(--green); }
+  .st-bounced  { color: var(--red);    border-color: var(--red); }
+  .st-no_reply { color: var(--yellow); border-color: var(--yellow); }
+  .st-unknown  { color: var(--dim);    border-color: var(--border); }
+  input[type="search"] {
+    width: 100%; max-width: 340px; background: var(--card); border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px; padding: .45rem .8rem; margin-bottom: .8rem;
+    font: inherit; outline: none;
+  }
+  input[type="search"]:focus { border-color: var(--teal-dark); }
+  .empty { color: var(--dim); padding: 1rem; }
+  .tablewrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+  <h1>JobHunter <span>— Dashboard</span></h1>
+  <div class="sub" id="generated"></div>
+
+  <div class="cards" id="cards"></div>
+
+  <h2>Envios por semana</h2>
+  <div class="bars" id="bars"></div>
+
+  <h2>Runs (posts → ofertas → enviados)</h2>
+  <div class="tablewrap"><table id="runs"></table></div>
+
+  <h2>Aplicaciones</h2>
+  <input type="search" id="q" placeholder="Filtrar por empresa, puesto o email...">
+  <div class="tablewrap"><table id="apps"></table></div>
+
+<script>
+const STATUS_LABEL = {
+  replied: "RESPONDIO", bounced: "REBOTO",
+  no_reply: "SIN RESPUESTA", unknown: "SIN CONCILIAR",
+};
+let APPS = [];
+
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"]/g, c => (
+    {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]
+  ));
+}
+
+function fmtDate(iso) {
+  if (!iso) return "";
+  return iso.slice(0, 10);
+}
+
+function renderCards(d) {
+  const t = d.totals;
+  document.getElementById("cards").innerHTML = `
+    <div class="card"><div class="num">${t.sent}</div><div class="lbl">Enviados</div></div>
+    <div class="card"><div class="num" style="color:var(--green)">${t.replied}</div>
+      <div class="lbl">Respondidos</div><div class="rate" style="color:var(--green)">${d.reply_rate}% de entregados</div></div>
+    <div class="card"><div class="num" style="color:var(--red)">${t.bounced}</div>
+      <div class="lbl">Rebotados</div><div class="rate" style="color:var(--red)">${d.bounce_rate}%</div></div>
+    <div class="card"><div class="num" style="color:var(--yellow)">${t.no_reply}</div>
+      <div class="lbl">Sin respuesta</div></div>
+    <div class="card"><div class="num" style="color:var(--dim)">${t.unknown}</div>
+      <div class="lbl">Sin conciliar</div><div class="rate" style="color:var(--dim)">ejecuta jobhunter sync</div></div>`;
+}
+
+function renderBars(weeks) {
+  const max = Math.max(1, ...weeks.map(w => w.sent));
+  document.getElementById("bars").innerHTML = weeks.map(w => `
+    <div class="bar">
+      <div class="n">${w.sent || ""}</div>
+      <div class="fill" style="height:${Math.round(w.sent / max * 100)}%"></div>
+      <div class="wk">${esc(w.week.slice(5))}</div>
+    </div>`).join("");
+}
+
+function renderRuns(runs) {
+  const rows = runs.slice().reverse().slice(0, 15).map(r => `
+    <tr><td class="dim">${fmtDate(r.date)}</td><td class="dim">${esc(r.mode)}</td>
+    <td>${r.posts}</td><td>${r.offers}</td><td>${r.sent}</td></tr>`).join("");
+  document.getElementById("runs").innerHTML =
+    "<tr><th>Fecha</th><th>Modo</th><th>Posts</th><th>Ofertas</th><th>Enviados</th></tr>" +
+    (rows || '<tr><td class="empty" colspan="5">Sin runs todavia</td></tr>');
+}
+
+function renderApps(filter) {
+  const q = (filter || "").toLowerCase();
+  const rows = APPS.filter(a =>
+    !q || [a.company, a.job_title, a.sent_to].join(" ").toLowerCase().includes(q)
+  ).map(a => `
+    <tr>
+      <td class="dim">${fmtDate(a.date)}</td>
+      <td>${esc(a.job_title)}</td>
+      <td>${esc(a.company)}</td>
+      <td class="dim">${esc(a.sent_to)}</td>
+      <td><span class="pill st-${a.status}">${STATUS_LABEL[a.status] || esc(a.status)}</span></td>
+      <td class="dim">${a.status === "replied" ? fmtDate(a.reply_date) :
+        (a.days_since_sent != null ? a.days_since_sent + " dias" : "")}</td>
+    </tr>`).join("");
+  document.getElementById("apps").innerHTML =
+    "<tr><th>Fecha</th><th>Puesto</th><th>Empresa</th><th>Enviado a</th><th>Estado</th><th>Respuesta / Espera</th></tr>" +
+    (rows || '<tr><td class="empty" colspan="6">Sin aplicaciones</td></tr>');
+}
+
+fetch("/api/data").then(r => r.json()).then(d => {
+  APPS = d.applications;
+  document.getElementById("generated").textContent =
+    "Generado " + d.generated_at.replace("T", " ").slice(0, 19);
+  renderCards(d);
+  renderBars(d.weeks);
+  renderRuns(d.runs);
+  renderApps("");
+  document.getElementById("q").addEventListener("input", e => renderApps(e.target.value));
+});
+</script>
+</body>
+</html>
