@@ -6,6 +6,7 @@ from jobhunter.banner import get_banner
 from jobhunter.cli.apply import cmd_apply
 from jobhunter.cli.blacklist import cmd_blacklist
 from jobhunter.cli.dashboard import cmd_dashboard
+from jobhunter.cli.sync import cmd_sync
 from jobhunter.cli.help import cmd_help
 from jobhunter.cli.login import cmd_login
 from jobhunter.cli.optimize import cmd_optimize
@@ -96,6 +97,15 @@ def main():
                 except ValueError:
                     pass
         cmd_dashboard(port=port)
+    elif cmd in ("sync",):
+        days = 60
+        for i, a in enumerate(sys.argv):
+            if a == "--days" and i + 1 < len(sys.argv):
+                try:
+                    days = int(sys.argv[i + 1])
+                except ValueError:
+                    pass
+        cmd_sync(days=days)
     elif cmd in ("status",):
         cmd_status()
     elif cmd in ("update",):
