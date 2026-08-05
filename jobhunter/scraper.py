@@ -12,6 +12,57 @@ from jobhunter.constants import SESSION_DIR, TIME_FILTERS
 from jobhunter.ui import console
 
 
+# La UI nueva de busqueda ya no expone el URN del post en el DOM (ni en hrefs
+# ni en atributos); la unica fuente 1:1 es el item "Copiar enlace a la
+# publicacion" del menu de tres puntos, que escribe un lnkd.in al portapapeles.
+# Requiere lanzar el contexto con permissions=["clipboard-read", "clipboard-write"].
+COPY_LINK_JS = r"""async (idx) => {
+    const items = document.querySelectorAll('[role="listitem"]');
+    const item = items[idx];
+    if (!item) return null;
+    item.scrollIntoView({block: 'center'});
+    await new Promise(r => setTimeout(r, 500));
+    const menuBtn = [...item.querySelectorAll('button')]
+        .find(b => /controles|control menu|menú de control/i.test(b.getAttribute('aria-label') || ''));
+    if (!menuBtn) return null;
+    menuBtn.click();
+    await new Promise(r => setTimeout(r, 700));
+    let url = null;
+    try {
+        const opts = [...document.querySelectorAll('[role="menu"] *, .artdeco-dropdown__content *')]
+            .filter(e => /Copiar enlace|Copy link/i.test(e.textContent || '') && e.children.length <= 2);
+        const target = opts.find(e => e.closest('li') || e.tagName === 'BUTTON' || e.getAttribute('role') === 'menuitem') || opts[0];
+        if (target) {
+            target.click();
+            await new Promise(r => setTimeout(r, 800));
+            url = await navigator.clipboard.readText();
+        }
+    } catch (e) {}
+    try { if (menuBtn.getAttribute('aria-expanded') === 'true') menuBtn.click(); } catch (e) {}
+    return url;
+}"""
+
+
+def collect_post_urls(page, count):
+    """Extrae la URL de cada post via el menu "Copiar enlace" (portapapeles).
+
+    Retorna {indice_listitem: url}. Los fallos por item se ignoran (url ausente).
+    """
+    urls = {}
+    for i in range(count):
+        try:
+            url = page.evaluate(COPY_LINK_JS, i)
+        except Exception:
+            continue
+        if isinstance(url, str) and url.strip().startswith("http"):
+            urls[i] = url.strip()
+        try:
+            page.wait_for_timeout(random.randint(200, 500))
+        except Exception:
+            pass
+    return urls
+
+
 def scrape_posts(page, query, max_scroll=4, time_filter="24h"):
     """Busca en LinkedIn por contenido, scrollea y extrae posts con emails."""
     encoded = urllib.parse.quote(query)
@@ -37,31 +88,8 @@ def scrape_posts(page, query, max_scroll=4, time_filter="24h"):
 
     post_urls = {}
     try:
-        listitems = page.locator('[role="listitem"]')
-        for i in range(listitems.count()):
-            try:
-                menu_btn = listitems.nth(i).locator('button[aria-label*="controles"]').first
-                if not menu_btn.is_visible(timeout=500):
-                    continue
-                menu_btn.click()
-                page.wait_for_timeout(random.randint(400, 900))
-                activity_id = page.evaluate(r"""() => {
-                    const links = document.querySelectorAll('a[href*="entityUrn"]');
-                    for (const l of links) {
-                        const m = (l.getAttribute('href') || '').match(/activity%3A(\d+)/);
-                        if (m) return m[1];
-                    }
-                    return null;
-                }""")
-                if activity_id:
-                    post_urls[i] = f"https://www.linkedin.com/feed/update/urn:li:activity:{activity_id}"
-                page.keyboard.press("Escape")
-                page.wait_for_timeout(random.randint(200, 500))
-            except Exception:
-                try:
-                    page.keyboard.press("Escape")
-                except Exception:
-                    pass
+        n_items = page.locator('[role="listitem"]').count()
+        post_urls = collect_post_urls(page, n_items)
     except Exception:
         pass
 

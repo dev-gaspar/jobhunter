@@ -63,6 +63,28 @@ class FakePage:
         return self.main_text
 
 
+class CollectPostUrlsTests(unittest.TestCase):
+    def test_collects_only_valid_urls(self):
+        from jobhunter.scraper import collect_post_urls
+        page = MagicMock()
+        page.evaluate.side_effect = ["https://lnkd.in/p/abc", None, "not-a-url"]
+        urls = collect_post_urls(page, 3)
+        self.assertEqual(urls, {0: "https://lnkd.in/p/abc"})
+
+    def test_survives_evaluate_errors(self):
+        from jobhunter.scraper import collect_post_urls
+        page = MagicMock()
+        page.evaluate.side_effect = [RuntimeError("boom"), "https://lnkd.in/p/xyz"]
+        urls = collect_post_urls(page, 2)
+        self.assertEqual(urls, {1: "https://lnkd.in/p/xyz"})
+
+    def test_zero_items(self):
+        from jobhunter.scraper import collect_post_urls
+        page = MagicMock()
+        self.assertEqual(collect_post_urls(page, 0), {})
+        page.evaluate.assert_not_called()
+
+
 class ExtractPostTextTests(unittest.TestCase):
     def test_prefers_expandable_text_box(self):
         from jobhunter.scraper import extract_post_text
