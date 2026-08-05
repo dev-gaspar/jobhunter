@@ -17,6 +17,9 @@ jobhunter run --time 24h|week|month  # Date filter for LinkedIn searches
 jobhunter --test email@test.com      # Test mode (sends to your email, not recruiters)
 jobhunter optimize                   # AI-powered search query optimization
 jobhunter optimize "feedback"        # Optimization with custom context
+jobhunter apply [link|"texto"]       # Apply to a single posting (paste mode if no arg, sentinel ".")
+jobhunter dashboard [--port N]       # Local metrics dashboard (default 4090)
+jobhunter sync [--days N]            # Reconcile replies/bounces via Gmail IMAP (default 60)
 jobhunter history                    # Application history (--last N, --company, --since, --all)
 jobhunter blacklist                  # View/add/remove blocked companies
 jobhunter status                     # Config & stats dashboard
@@ -56,6 +59,11 @@ All agents call Gemini via direct HTTP POST (`call_gemini()` / `call_gemini_visi
   - `mailer.py`, `browser.py`, `updater.py`, `scraper.py` — infraestructura
   - `agents/filter.py`, `agents/cv.py`, `agents/email.py`, `agents/optimizer.py` — 4 agentes
   - `pipeline.py` — cmd_run (orquestacion de las 3 fases del run)
+  - `applying.py` — flujo por oferta (CV + email + preview + envio), compartido por run/apply
+  - `metrics.py` — agregados puros para el dashboard
+  - `inbox.py` — lectura IMAP + conciliacion de respuestas/rebotes
+  - `assets/dashboard.html` — pagina autocontenida del dashboard
+  - `cli/apply.py`, `cli/dashboard.py`, `cli/sync.py` — comandos nuevos
   - `cli/main.py` — dispatcher + parse_time_filter
   - `cli/setup.py` + los demas `cli/*.py` — comandos CLI individuales
   - `cv/builder.py` + `cv/templates/` — generacion de CV PDF

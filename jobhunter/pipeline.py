@@ -19,21 +19,18 @@ from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeEl
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
-from jobhunter.cv.builder import generate_cv_pdf, get_cv_filename
+from jobhunter.applying import apply_to_offer
 from jobhunter.offers import (
     deduplicate_offers_by_title_company,
     extract_emails,
     was_already_applied,
 )
 
-from jobhunter.agents.cv import agent_cv
-from jobhunter.agents.email import agent_email
 from jobhunter.agents.filter import agent_filter
 from jobhunter.banner import get_banner
 from jobhunter.browser import find_chrome, kill_playwright_zombies
 from jobhunter.config import is_configured, load_config
 from jobhunter.constants import BASE_DIR, SESSION_DIR
-from jobhunter.mailer import send_email
 from jobhunter.scraper import scrape_posts
 from jobhunter.storage import load_kb, save_kb
 from jobhunter.ui import console
@@ -349,156 +346,28 @@ def cmd_run(
     for i, job in enumerate(offers, 1):
         title = (job.get("job_title") or "Posicion")[:80]
         company = (job.get("company") or "Empresa")[:40]
-        rec_email = job.get("contact_email")
-        to = test_email or rec_email
         label = f"  [cyan]{i}[/cyan][dim]/{total}[/dim] {title} [dim]→[/dim] {company}"
 
-        cv_path = None
-        edata = None
-        cv_data = None
-        try:
-            with console.status(f"{label}  [dim]CV...[/dim]") as status:
-                for retry in range(3):
-                    try:
-                        cv_data = agent_cv(cfg, job)
-                        cv_fn = get_cv_filename(company, title)
-                        cv_path = os.path.join(BASE_DIR, "output", "cvs", cv_fn)
-                        os.makedirs(os.path.dirname(cv_path), exist_ok=True)
-                        generate_cv_pdf(
-                            cv_data,
-                            cfg["profile"],
-                            cv_path,
-                            title,
-                            company,
-                            language=job.get("language", "es"),
-                            template=cfg.get("cv_template", "modern"),
-                        )
-                        break
-                    except Exception as e:
-                        if retry == 2:
-                            raise
-                        time.sleep(5)
-
-                status.update(f"{label}  [dim]Email...[/dim]")
-                for retry in range(3):
-                    try:
-                        edata = agent_email(cfg, job, cv_data=cv_data)
-                        break
-                    except Exception as e:
-                        if retry == 2:
-                            raise
-                        time.sleep(5)
-        except Exception as e:
-            console.print(f"{label}  [red]! {e}[/red]")
-            errors += 1
-            results.append({
-                "job_title": title,
-                "company": company,
-                "recruiter_email": rec_email,
-                "sent_to": to,
-                "cv_path": cv_path,
-            })
-            time.sleep(2)
-            continue
-
-        body = edata["body"]
-        if test_email:
-            body = f"--- RECLUTADOR: {job.get('contact_name','?')} | EMAIL: {rec_email or '?'} | {company} ---\n\n" + body
-
-        cv_name = os.path.basename(cv_path) if cv_path else ""
-
-        if dry_run:
-            generated += 1
-            preview_text = (
-                f"Para: {to}\n"
-                f"Asunto: {edata['subject']}\n"
-                f"CV adjunto: {cv_name or '—'}\n\n"
-                f"{body}"
-            )
-            console.print(Panel(preview_text, border_style="dim", title="[dim]Dry run[/dim]"))
-            console.print("       [yellow]·[/yellow] Dry-run: no se envia email (no se guarda en historial)")
-            results.append({
-                "job_title": title,
-                "company": company,
-                "recruiter_email": rec_email,
-                "sent_to": to,
-                "cv_path": cv_path,
-                "dry_run": True,
-            })
-            console.print()
-            time.sleep(2)
-            continue
-
-        do_send = False
-        if auto_apply or preview_send_all:
-            do_send = True
-        else:
-            while True:
-                preview_text = (
-                    f"Para: {to}\n"
-                    f"Asunto: {edata['subject']}\n"
-                    f"CV adjunto: {cv_name or '—'}\n\n"
-                    f"{body}"
-                )
-                console.print(Panel(preview_text, border_style="cyan", title="[bold]Preview[/bold]"))
-                choice = Prompt.ask(
-                    "  (s) Enviar  (x) Saltar  (e) Editar asunto  (a) Enviar todos sin preguntar",
-                    default="s",
-                ).strip().lower()
-                if choice in ("s", "send", ""):
-                    do_send = True
-                    break
-                if choice in ("x", "skip"):
-                    do_send = False
-                    console.print("       [yellow]·[/yellow] Omitido")
-                    break
-                if choice in ("e", "edit"):
-                    edata["subject"] = Prompt.ask("  Asunto", default=edata["subject"])
-                    continue
-                if choice in ("a", "all"):
-                    preview_send_all = True
-                    do_send = True
-                    break
-                console.print("  [red]✗[/red] Opcion invalida (s/x/e/a)")
-
-        if not do_send:
-            results.append({
-                "job_title": title,
-                "company": company,
-                "recruiter_email": rec_email,
-                "sent_to": to,
-                "cv_path": cv_path,
-                "skipped": True,
-            })
-            console.print()
-            time.sleep(1)
-            continue
-
-        try:
-            send_email(cfg, to, edata["subject"], body, cv_path)
+        res = apply_to_offer(
+            cfg, kb, job,
+            test_email=test_email,
+            dry_run=dry_run,
+            interactive=not auto_apply,
+            preview_send_all=preview_send_all,
+            mode=mode,
+            label=label,
+        )
+        preview_send_all = res["preview_send_all"]
+        results.append(res["record"])
+        if res["status"] == "sent":
             sent += 1
-            console.print(f"{label}  [green]> Enviado[/green] [dim]→ {to}[/dim]")
-            kb["applications"].append({
-                "date": datetime.now().isoformat(),
-                "job_title": title,
-                "company": company,
-                "recruiter_email": rec_email,
-                "sent_to": to,
-                "mode": mode,
-                "post_url": job.get("post_url"),
-            })
-        except Exception as e:
-            console.print(f"{label}  [red]! {e}[/red]")
+        elif res["status"] == "dry":
+            generated += 1
+        elif res["status"] == "error":
             errors += 1
-
-        results.append({
-            "job_title": title,
-            "company": company,
-            "recruiter_email": rec_email,
-            "sent_to": to,
-            "cv_path": cv_path,
-        })
-        time.sleep(2)
+        if res["status"] in ("dry", "skipped"):
+            console.print()
+        time.sleep(1 if res["status"] == "skipped" else 2)
 
     run_entry = {
         "date": datetime.now().isoformat(),

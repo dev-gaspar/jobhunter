@@ -141,3 +141,65 @@ def do_linkedin_login():
 
 # Alias retrocompatible con el nombre interno original
 _do_linkedin_login = do_linkedin_login
+
+def extract_post_text(page):
+    """Extrae el texto principal de una publicacion con selectores en cascada."""
+    try:
+        btn = page.query_selector("button.feed-shared-inline-show-more-text__see-more-less-toggle")
+        if btn:
+            btn.click()
+            page.wait_for_timeout(500)
+    except Exception:
+        pass
+    selectors = [
+        'span[data-testid="expandable-text-box"]',
+        "div.feed-shared-update-v2__description",
+        "article",
+    ]
+    for sel in selectors:
+        try:
+            el = page.query_selector(sel)
+            if el:
+                text = (el.inner_text() or "").strip()
+                if len(text) >= 50:
+                    return text
+        except Exception:
+            continue
+    try:
+        return (page.inner_text("main") or "").strip()[:6000]
+    except Exception:
+        return ""
+
+
+def scrape_single_post(url):
+    """Abre una publicacion individual con la sesion persistente y extrae su texto.
+
+    Retorna el texto, o None si fallo (ya imprime la causa).
+    """
+    if not os.path.exists(SESSION_DIR):
+        console.print("  [red]✗[/red] Sin sesion LinkedIn. Ejecuta: [cyan]jobhunter login[/cyan]")
+        return None
+    kill_playwright_zombies()
+    try:
+        with sync_playwright() as p:
+            chrome = find_chrome()
+            browser = p.chromium.launch_persistent_context(
+                user_data_dir=SESSION_DIR, headless=True,
+                viewport={"width": 1300, "height": 850}, executable_path=chrome,
+            )
+            page = browser.pages[0] if browser.pages else browser.new_page()
+            page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            page.wait_for_timeout(4000)
+            if "login" in page.url or "signin" in page.url or "authwall" in page.url:
+                console.print("  [red]![/red] Sesion expirada. Ejecuta: [cyan]jobhunter login[/cyan]")
+                browser.close()
+                return None
+            text = extract_post_text(page)
+            browser.close()
+            if not text:
+                console.print("  [red]✗[/red] No se pudo extraer texto de la publicacion. Copia el texto y usa: [cyan]jobhunter apply[/cyan]")
+                return None
+            return text
+    except Exception as e:
+        console.print(f"  [red]✗[/red] No se pudo abrir la publicacion: {e}")
+        return None
