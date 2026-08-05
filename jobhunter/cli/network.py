@@ -5,6 +5,7 @@ Nunca automatiza acciones en LinkedIn: abre el perfil en el navegador por
 defecto (donde el usuario tiene su sesion normal) y es el usuario quien da
 clic en Conectar. Solo se lleva el registro en kb["network"].
 """
+import urllib.parse
 import webbrowser
 from datetime import datetime
 
@@ -14,6 +15,19 @@ from rich.prompt import Confirm, Prompt
 from jobhunter.banner import get_banner
 from jobhunter.storage import load_kb, save_kb
 from jobhunter.ui import console
+
+
+def _name_from_url(url):
+    """Nombre legible desde el slug del perfil cuando el post no lo trae.
+
+    "nicolas-villalba-958a5b46" -> "Nicolas Villalba" (el token final con
+    digitos es el id que LinkedIn agrega a slugs repetidos).
+    """
+    slug = urllib.parse.unquote((url or "").rstrip("/").rsplit("/in/", 1)[-1])
+    parts = [p for p in slug.split("-") if p]
+    if len(parts) > 1 and any(ch.isdigit() for ch in parts[-1]):
+        parts = parts[:-1]
+    return " ".join(p.capitalize() for p in parts) or "?"
 
 
 def build_network_queue(applications, network):
@@ -28,7 +42,7 @@ def build_network_queue(applications, network):
         seen.add(url)
         queue.append({
             "profile_url": url,
-            "name": a.get("author_name") or "?",
+            "name": a.get("author_name") or _name_from_url(url),
             "company": a.get("company") or "-",
             "job_title": a.get("job_title") or "-",
             "applied": (a.get("date") or "")[:10],

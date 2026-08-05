@@ -29,6 +29,21 @@ class BuildNetworkQueueTests(unittest.TestCase):
         self.assertEqual(build_network_queue(None, None), [])
 
 
+class NameFromUrlTests(unittest.TestCase):
+    def test_derives_pretty_name_from_slug(self):
+        from jobhunter.cli.network import _name_from_url
+        self.assertEqual(_name_from_url("https://www.linkedin.com/in/nicolas-villalba-958a5b46/"), "Nicolas Villalba")
+        self.assertEqual(_name_from_url("https://linkedin.com/in/sabrinareiris"), "Sabrinareiris")
+        self.assertEqual(_name_from_url(""), "?")
+        self.assertEqual(_name_from_url(None), "?")
+
+    def test_queue_uses_slug_when_name_missing(self):
+        apps = [{"author_url": "https://linkedin.com/in/ana-perez-12ab34", "author_name": None,
+                 "date": "2026-08-01T10:00:00", "company": "X", "job_title": "Dev"}]
+        queue = build_network_queue(apps, [])
+        self.assertEqual(queue[0]["name"], "Ana Perez")
+
+
 class CmdNetworkTests(unittest.TestCase):
     @patch("jobhunter.cli.network.console")
     @patch("jobhunter.cli.network.save_kb")

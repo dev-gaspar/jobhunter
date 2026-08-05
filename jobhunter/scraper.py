@@ -137,10 +137,17 @@ def scrape_posts(page, query, max_scroll=4, time_filter="24h"):
             let author_url = null, author_name = null;
             const item = box.closest('[role="listitem"]');
             if (item) {
-                const a = item.querySelector('a[href*="/in/"]');
-                if (a) {
-                    author_url = (a.href || '').split('?')[0] || null;
-                    author_name = ((a.innerText || '').split('\n')[0] || '').trim() || null;
+                const anchors = [...item.querySelectorAll('a[href*="/in/"]')];
+                if (anchors.length) {
+                    author_url = (anchors[0].href || '').split('?')[0] || null;
+                    for (const a of anchors) {
+                        const t = (((a.innerText || '').split('\n')[0] || '').split('•')[0] || '').trim();
+                        if (t) { author_name = t; break; }
+                    }
+                    if (!author_name) {
+                        const img = item.querySelector('a[href*="/in/"] img[alt]');
+                        if (img) author_name = (img.getAttribute('alt') || '').trim() || null;
+                    }
                 }
             }
             const mapKey = (box.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 120);
