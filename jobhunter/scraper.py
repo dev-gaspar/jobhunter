@@ -16,51 +16,87 @@ from jobhunter.ui import console
 # ni en atributos); la unica fuente 1:1 es el item "Copiar enlace a la
 # publicacion" del menu de tres puntos, que escribe un lnkd.in al portapapeles.
 # Requiere lanzar el contexto con permissions=["clipboard-read", "clipboard-write"].
-COPY_LINK_JS = r"""async (idx) => {
-    const items = document.querySelectorAll('[role="listitem"]');
-    const item = items[idx];
-    if (!item) return null;
-    item.scrollIntoView({block: 'center'});
-    await new Promise(r => setTimeout(r, 500));
-    const menuBtn = [...item.querySelectorAll('button')]
-        .find(b => /controles|control menu|menú de control/i.test(b.getAttribute('aria-label') || ''));
-    if (!menuBtn) return null;
-    menuBtn.click();
-    await new Promise(r => setTimeout(r, 700));
-    let url = null;
-    try {
-        const opts = [...document.querySelectorAll('[role="menu"] *, .artdeco-dropdown__content *')]
-            .filter(e => /Copiar enlace|Copy link/i.test(e.textContent || '') && e.children.length <= 2);
-        const target = opts.find(e => e.closest('li') || e.tagName === 'BUTTON' || e.getAttribute('role') === 'menuitem') || opts[0];
-        if (target) {
-            target.click();
-            await new Promise(r => setTimeout(r, 800));
-            url = await navigator.clipboard.readText();
+#
+# La lista de resultados esta VIRTUALIZADA: con 12+ posts, LinkedIn desmonta
+# items al desplazarse y los indices del NodeList se corren entre iteraciones
+# (links faltantes o, peor, asignados al vecino). Por eso la identidad de cada
+# post es su texto normalizado (primeros 120 chars), nunca su indice, y todo
+# ocurre en UNA pasada JS con cola de trabajo que re-escanea lo que aparezca.
+COLLECT_URLS_JS = r"""async () => {
+    const KEY = el => (el.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+    const allBoxes = () => [...document.querySelectorAll('span[data-testid="expandable-text-box"]')];
+    const out = {};
+    const seen = new Set();
+    let queue = allBoxes().map(KEY).filter(k => k.length >= 25);
+    for (let round = 0; round < 3; round++) {
+        const pending = queue.filter(k => !seen.has(k));
+        if (!pending.length) break;
+        for (const key of pending) {
+            seen.add(key);
+            let url = null;
+            for (let attempt = 0; attempt < 2 && !url; attempt++) {
+                const box = allBoxes().find(b => KEY(b) === key);
+                if (!box) break;
+                const item = box.closest('[role="listitem"]');
+                if (!item) break;
+                item.scrollIntoView({block: 'center'});
+                await new Promise(r => setTimeout(r, 500));
+                const menuBtn = [...item.querySelectorAll('button')]
+                    .find(b => /controles|control menu|menú de control/i.test(b.getAttribute('aria-label') || ''));
+                if (!menuBtn) break;
+                try { await navigator.clipboard.writeText(''); } catch (e) {}
+                if (menuBtn.getAttribute('aria-expanded') !== 'true') menuBtn.click();
+                let target = null;
+                for (let t = 0; t < 10 && !target; t++) {
+                    await new Promise(r => setTimeout(r, 200));
+                    if (t === 4 && menuBtn.getAttribute('aria-expanded') !== 'true') menuBtn.click();
+                    const scopes = [item, document];
+                    let opts = [];
+                    for (const scope of scopes) {
+                        opts = [...scope.querySelectorAll('[role="menu"] *, .artdeco-dropdown__content *')]
+                            .filter(e => e.offsetParent !== null)
+                            .filter(e => /Copiar enlace|Copy link/i.test(e.textContent || '') && e.children.length <= 2);
+                        if (opts.length) break;
+                    }
+                    target = opts.find(e => e.closest('li') || e.tagName === 'BUTTON' || e.getAttribute('role') === 'menuitem') || opts[0] || null;
+                }
+                if (target) {
+                    try {
+                        target.click();
+                        for (let t = 0; t < 6; t++) {
+                            await new Promise(r => setTimeout(r, 250));
+                            const txt = await navigator.clipboard.readText();
+                            if (txt && txt.startsWith('http')) { url = txt.trim(); break; }
+                        }
+                    } catch (e) {}
+                }
+                try {
+                    document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
+                    if (menuBtn.getAttribute('aria-expanded') === 'true') menuBtn.click();
+                } catch (e) {}
+            }
+            if (url) out[key] = url;
+            await new Promise(r => setTimeout(r, 250));
         }
-    } catch (e) {}
-    try { if (menuBtn.getAttribute('aria-expanded') === 'true') menuBtn.click(); } catch (e) {}
-    return url;
+        queue = allBoxes().map(KEY).filter(k => k.length >= 25 && !seen.has(k));
+    }
+    return out;
 }"""
 
 
-def collect_post_urls(page, count):
-    """Extrae la URL de cada post via el menu "Copiar enlace" (portapapeles).
+def collect_post_urls(page):
+    """Extrae {texto_normalizado: url} de los posts via "Copiar enlace".
 
-    Retorna {indice_listitem: url}. Los fallos por item se ignoran (url ausente).
+    Los fallos por item se ignoran (url ausente); valores no-http se descartan.
     """
-    urls = {}
-    for i in range(count):
-        try:
-            url = page.evaluate(COPY_LINK_JS, i)
-        except Exception:
-            continue
-        if isinstance(url, str) and url.strip().startswith("http"):
-            urls[i] = url.strip()
-        try:
-            page.wait_for_timeout(random.randint(200, 500))
-        except Exception:
-            pass
-    return urls
+    try:
+        res = page.evaluate(COLLECT_URLS_JS)
+    except Exception:
+        return {}
+    if not isinstance(res, dict):
+        return {}
+    return {k: v.strip() for k, v in res.items()
+            if isinstance(v, str) and v.strip().startswith("http")}
 
 
 def scrape_posts(page, query, max_scroll=4, time_filter="24h"):
@@ -86,12 +122,7 @@ def scrape_posts(page, query, max_scroll=4, time_filter="24h"):
     }""")
     page.wait_for_timeout(random.randint(1500, 3000))
 
-    post_urls = {}
-    try:
-        n_items = page.locator('[role="listitem"]').count()
-        post_urls = collect_post_urls(page, n_items)
-    except Exception:
-        pass
+    post_urls = collect_post_urls(page)
 
     posts = page.evaluate(r"""() => {
         const boxes = document.querySelectorAll('span[data-testid="expandable-text-box"]');
@@ -112,14 +143,15 @@ def scrape_posts(page, query, max_scroll=4, time_filter="24h"):
                     author_name = ((a.innerText || '').split('\n')[0] || '').trim() || null;
                 }
             }
+            const mapKey = (box.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 120);
             posts.push({text: text.substring(0, 4000), emails_found: emails, index: idx,
-                        author_url, author_name});
+                        key: mapKey, author_url, author_name});
         });
         return posts;
     }""")
 
     for post in posts:
-        post["post_url"] = post_urls.get(post["index"])
+        post["post_url"] = post_urls.get(post.pop("key", None))
 
     return posts
 
