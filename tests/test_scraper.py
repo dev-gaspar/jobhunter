@@ -37,5 +37,56 @@ class ScrapePostsTests(unittest.TestCase):
         self.assertIn("python%20dev", url)
 
 
+class FakeEl:
+    def __init__(self, text):
+        self._text = text
+
+    def inner_text(self):
+        return self._text
+
+    def click(self):
+        pass
+
+
+class FakePage:
+    def __init__(self, mapping, main_text=""):
+        self.mapping = mapping
+        self.main_text = main_text
+
+    def query_selector(self, sel):
+        return self.mapping.get(sel)
+
+    def wait_for_timeout(self, ms):
+        pass
+
+    def inner_text(self, sel):
+        return self.main_text
+
+
+class ExtractPostTextTests(unittest.TestCase):
+    def test_prefers_expandable_text_box(self):
+        from jobhunter.scraper import extract_post_text
+        page = FakePage({'span[data-testid="expandable-text-box"]': FakeEl("Oferta de trabajo " + "x" * 60)})
+        self.assertTrue(extract_post_text(page).startswith("Oferta de trabajo"))
+
+    def test_falls_back_to_article(self):
+        from jobhunter.scraper import extract_post_text
+        page = FakePage({"article": FakeEl("Texto del articulo " + "y" * 60)})
+        self.assertTrue(extract_post_text(page).startswith("Texto del articulo"))
+
+    def test_last_resort_main_text(self):
+        from jobhunter.scraper import extract_post_text
+        page = FakePage({}, main_text="Contenido main de respaldo " + "z" * 60)
+        self.assertIn("Contenido main", extract_post_text(page))
+
+    def test_short_candidates_are_skipped(self):
+        from jobhunter.scraper import extract_post_text
+        page = FakePage(
+            {'span[data-testid="expandable-text-box"]': FakeEl("corto")},
+            main_text="Respaldo largo " + "w" * 60,
+        )
+        self.assertIn("Respaldo largo", extract_post_text(page))
+
+
 if __name__ == "__main__":
     unittest.main()
