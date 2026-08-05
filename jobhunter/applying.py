@@ -14,7 +14,7 @@ from jobhunter.agents.cv import agent_cv
 from jobhunter.agents.email import agent_email
 from jobhunter.constants import BASE_DIR
 from jobhunter.cv.builder import generate_cv_pdf, get_cv_filename
-from jobhunter.mailer import send_email
+from jobhunter.mailer import domain_accepts_mail, send_email
 from jobhunter.ui import console
 
 
@@ -135,6 +135,24 @@ def apply_to_offer(cfg, kb, job, test_email=None, dry_run=False,
         record["skipped"] = True
         return {"status": "skipped", "record": record, "preview_send_all": preview_send_all}
 
+    if not test_email and domain_accepts_mail(to) is False:
+        console.print(f"{label}  [yellow]![/yellow] El dominio de [bold]{to}[/bold] no tiene registros de correo (posible typo)")
+        if interactive:
+            alt = (Prompt.ask("  Email alternativo (vacio = omitir esta oferta)", default="") or "").strip()
+            if alt and "@" in alt:
+                to = alt
+                rec_email = alt
+                record["sent_to"] = to
+                record["recruiter_email"] = rec_email
+            else:
+                console.print("       [yellow]·[/yellow] Omitido por dominio invalido")
+                record["skipped"] = True
+                return {"status": "skipped", "record": record, "preview_send_all": preview_send_all}
+        else:
+            console.print("       [yellow]·[/yellow] Omitido por dominio invalido")
+            record["skipped"] = True
+            return {"status": "skipped", "record": record, "preview_send_all": preview_send_all}
+
     try:
         send_email(cfg, to, edata["subject"], body, cv_path)
         console.print(f"{label}  [green]> Enviado[/green] [dim]→ {to}[/dim]")
@@ -147,6 +165,9 @@ def apply_to_offer(cfg, kb, job, test_email=None, dry_run=False,
             "mode": mode,
             "post_url": job.get("post_url"),
             "subject": edata["subject"],
+            "query": job.get("query"),
+            "author_url": job.get("author_url"),
+            "author_name": job.get("author_name"),
         })
         return {"status": "sent", "record": record, "preview_send_all": preview_send_all}
     except Exception as e:

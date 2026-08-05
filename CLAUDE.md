@@ -20,6 +20,7 @@ jobhunter optimize "feedback"        # Optimization with custom context
 jobhunter apply [link|"texto"]       # Apply to a single posting (paste mode if no arg, sentinel ".")
 jobhunter dashboard [--port N]       # Local metrics dashboard (default 4090)
 jobhunter sync [--days N]            # Reconcile replies/bounces via Gmail IMAP (default 60)
+jobhunter network                    # Assisted recruiter connections (opens profiles, user clicks)
 jobhunter history                    # Application history (--last N, --company, --since, --all)
 jobhunter blacklist                  # View/add/remove blocked companies
 jobhunter status                     # Config & stats dashboard
@@ -63,7 +64,7 @@ All agents call Gemini via direct HTTP POST (`call_gemini()` / `call_gemini_visi
   - `metrics.py` — agregados puros para el dashboard
   - `inbox.py` — lectura IMAP + conciliacion de respuestas/rebotes
   - `assets/dashboard.html` — pagina autocontenida del dashboard
-  - `cli/apply.py`, `cli/dashboard.py`, `cli/sync.py` — comandos nuevos
+  - `cli/apply.py`, `cli/dashboard.py`, `cli/sync.py`, `cli/network.py` — comandos nuevos
   - `cli/main.py` — dispatcher + parse_time_filter
   - `cli/setup.py` + los demas `cli/*.py` — comandos CLI individuales
   - `cv/builder.py` + `cv/templates/` — generacion de CV PDF

@@ -111,6 +111,7 @@ def cmd_run(
                         key = pi["text"][:150]
                         if key not in seen:
                             seen.add(key)
+                            pi["query"] = query
                             all_posts.append(pi)
                     total_emails_found = sum(len(p.get("emails_found",[])) for p in all_posts)
                     prog.advance(task)
@@ -202,6 +203,9 @@ def cmd_run(
                 a["job_title"] = a.get("job_title") or "Software Developer"
                 a["company"] = a.get("company") or "Empresa"
                 a["post_url"] = post.get("post_url")
+                a["query"] = post.get("query")
+                a["author_url"] = post.get("author_url")
+                a["author_name"] = post.get("author_name")
                 offers.append(a)
             prog.advance(task)
             time.sleep(1.5)

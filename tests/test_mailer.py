@@ -74,5 +74,45 @@ class MailerTests(unittest.TestCase):
         self.assertIn("Candidato", msg["From"])
 
 
+class DomainAcceptsMailTests(unittest.TestCase):
+    def test_query_packet_ends_with_mx_qtype(self):
+        from jobhunter.mailer import _build_mx_query
+        pkt = _build_mx_query("acme.com", 0x1234)
+        self.assertEqual(pkt[:2], b"\x12\x34")
+        self.assertTrue(pkt.endswith(b"\x00\x0f\x00\x01"))
+        self.assertIn(b"\x04acme\x03com\x00", pkt)
+
+    def _resp(self, txid=0x1234, rcode=0, ancount=0):
+        import struct
+        flags = 0x8180 | rcode
+        return struct.pack(">HHHHHH", txid, flags, 1, ancount, 0, 0) + b"\x00" * 8
+
+    def test_parse_answers_means_mx_exists(self):
+        from jobhunter.mailer import _parse_mx_response
+        self.assertTrue(_parse_mx_response(self._resp(ancount=2), 0x1234))
+
+    def test_parse_nxdomain_is_false(self):
+        from jobhunter.mailer import _parse_mx_response
+        self.assertIs(_parse_mx_response(self._resp(rcode=3), 0x1234), False)
+
+    def test_parse_no_answers_is_false(self):
+        from jobhunter.mailer import _parse_mx_response
+        self.assertIs(_parse_mx_response(self._resp(ancount=0), 0x1234), False)
+
+    def test_parse_wrong_txid_is_none(self):
+        from jobhunter.mailer import _parse_mx_response
+        self.assertIsNone(_parse_mx_response(self._resp(txid=0x9999), 0x1234))
+
+    def test_parse_short_data_is_none(self):
+        from jobhunter.mailer import _parse_mx_response
+        self.assertIsNone(_parse_mx_response(b"\x00\x01", 0x1234))
+
+    def test_invalid_email_false_without_network(self):
+        from jobhunter.mailer import domain_accepts_mail
+        self.assertIs(domain_accepts_mail(""), False)
+        self.assertIs(domain_accepts_mail("sin-arroba"), False)
+        self.assertIs(domain_accepts_mail("x@sindominio"), False)
+
+
 if __name__ == "__main__":
     unittest.main()
