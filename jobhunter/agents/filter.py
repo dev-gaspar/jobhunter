@@ -5,6 +5,34 @@ import json
 from jobhunter.ai.gemini import call_gemini, call_gemini_vision
 from jobhunter.offers import extract_emails
 
+# search_languages ("1"=es, "2"=en, "3"=es+en) tambien define en que idiomas
+# puede estar escrita la publicacion. Gate deterministico ademas de la regla
+# del prompt: Gemini dejaba pasar posts en portugues porque "no requieren"
+# el idioma explicitamente.
+ALLOWED_LANGS = {"1": ("es",), "2": ("en",), "3": ("es", "en")}
+LANG_NAMES = {"es": "espanol", "en": "ingles"}
+
+
+def allowed_languages(cfg):
+    return ALLOWED_LANGS.get(str(cfg.get("search_languages", "3")), ("es", "en"))
+
+
+def enforce_language_gate(a, cfg):
+    """Marca is_relevant=False si la publicacion esta en un idioma no configurado."""
+    if not a.get("is_job") or not a.get("is_relevant", True):
+        return a
+    lang = (a.get("language") or "").strip().lower()[:2]
+    if not lang:
+        return a
+    allowed = allowed_languages(cfg)
+    if lang not in allowed:
+        nombres = ", ".join(LANG_NAMES.get(x, x) for x in allowed)
+        a["is_relevant"] = False
+        a["relevance_reason"] = (
+            "publicacion en idioma '" + lang + "': el perfil solo busca ofertas en " + nombres
+        )
+    return a
+
 
 def agent_filter(cfg, text, ss=None):
     """Analiza un post de LinkedIn y devuelve dict con is_job / is_relevant / datos."""
@@ -47,6 +75,8 @@ def agent_filter(cfg, text, ss=None):
 
     emails_line = ", ".join(emails) if emails else "ninguno"
     skills_str = json.dumps(profile_skills) if isinstance(profile_skills, dict) else str(profile_skills)[:500]
+    allowed = allowed_languages(cfg)
+    allowed_line = " o ".join(LANG_NAMES.get(x, x) + " (" + x + ")" for x in allowed)
 
     prompt = f"""ROLE: Eres un agente especializado en filtrar ofertas de trabajo de LinkedIn.
 Tu unico trabajo es analizar publicaciones y determinar si contienen ofertas REALES y RELEVANTES para este candidato.
@@ -69,6 +99,7 @@ REGLAS DE FILTRADO:
 - Relevante si el puesto tiene relacion con lo que busca el candidato: {job_types}
 {work_mode_rule}
 - Si la oferta REQUIERE un idioma con nivel avanzado o fluido que el candidato NO tiene a ese nivel, marcar is_relevant=false. Los idiomas del candidato son: {user_langs_str}
+- La publicacion debe estar escrita en {allowed_line}. Si esta escrita en OTRO idioma (por ejemplo portugues), marcar is_relevant=false aunque no exija ese idioma explicitamente
 - Extraer SIEMPRE el email si existe en el texto
 - Extraer empresa, titulo, descripcion COMPLETA con todos los detalles
 - Extraer requisitos especificos (habilidades, herramientas, anos de experiencia, idiomas, etc.)
@@ -88,6 +119,6 @@ SOLO JSON valido."""
             a["contact_email"] = None
         if emails and not a.get("contact_email"):
             a["contact_email"] = emails[0]
-        return a
+        return enforce_language_gate(a, cfg)
     except Exception as e:
         return {"is_job": False, "relevance_reason": str(e)}

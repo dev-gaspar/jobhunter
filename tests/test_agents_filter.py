@@ -72,5 +72,67 @@ class AgentFilterTests(unittest.TestCase):
         self.assertIn("Espanol", prompt)
 
 
+class LanguageGateTests(unittest.TestCase):
+    def _offer(self, lang):
+        return json.dumps({
+            "is_job": True, "job_title": "Dev", "company": "X",
+            "contact_email": "hr@x.com", "is_relevant": True, "language": lang,
+        })
+
+    @patch("jobhunter.agents.filter.call_gemini")
+    def test_pt_offer_rejected_with_spanish_only_config(self, mock_call):
+        mock_call.return_value = self._offer("pt")
+        cfg = dict(CFG, search_languages="1")
+        result = agent_filter(cfg, "Vaga para desenvolvedor backend hr@x.com")
+        self.assertFalse(result["is_relevant"])
+        self.assertIn("idioma", result["relevance_reason"].lower())
+
+    @patch("jobhunter.agents.filter.call_gemini")
+    def test_es_offer_passes_with_spanish_only_config(self, mock_call):
+        mock_call.return_value = self._offer("es")
+        cfg = dict(CFG, search_languages="1")
+        result = agent_filter(cfg, "Buscamos backend dev hr@x.com")
+        self.assertTrue(result["is_relevant"])
+
+    @patch("jobhunter.agents.filter.call_gemini")
+    def test_en_offer_rejected_when_spanish_only(self, mock_call):
+        mock_call.return_value = self._offer("en")
+        cfg = dict(CFG, search_languages="1")
+        result = agent_filter(cfg, "We are hiring backend dev hr@x.com")
+        self.assertFalse(result["is_relevant"])
+
+    @patch("jobhunter.agents.filter.call_gemini")
+    def test_en_offer_passes_when_bilingual(self, mock_call):
+        mock_call.return_value = self._offer("en")
+        cfg = dict(CFG, search_languages="3")
+        result = agent_filter(cfg, "We are hiring backend dev hr@x.com")
+        self.assertTrue(result["is_relevant"])
+
+    @patch("jobhunter.agents.filter.call_gemini")
+    def test_missing_language_not_blocked(self, mock_call):
+        mock_call.return_value = json.dumps({
+            "is_job": True, "job_title": "Dev", "company": "X",
+            "contact_email": "hr@x.com", "is_relevant": True,
+        })
+        cfg = dict(CFG, search_languages="1")
+        result = agent_filter(cfg, "Buscamos dev hr@x.com")
+        self.assertTrue(result["is_relevant"])
+
+    @patch("jobhunter.agents.filter.call_gemini")
+    def test_regional_variant_normalized(self, mock_call):
+        mock_call.return_value = self._offer("pt-BR")
+        cfg = dict(CFG, search_languages="3")
+        result = agent_filter(cfg, "Vaga backend hr@x.com")
+        self.assertFalse(result["is_relevant"])
+
+    @patch("jobhunter.agents.filter.call_gemini")
+    def test_prompt_mentions_allowed_languages(self, mock_call):
+        mock_call.return_value = json.dumps({"is_job": False})
+        cfg = dict(CFG, search_languages="1")
+        agent_filter(cfg, "post")
+        prompt = mock_call.call_args.args[1]
+        self.assertIn("espanol (es)", prompt.lower())
+
+
 if __name__ == "__main__":
     unittest.main()
