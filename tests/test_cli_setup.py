@@ -4,7 +4,7 @@ y se valida con smoke test manual; aqui cubrimos las piezas puras."""
 import unittest
 from unittest.mock import patch
 
-from jobhunter.cli.setup import _ask, _ask_secret, _mask_secret
+from jobhunter.cli.setup import _ask, _ask_secret, _mask_secret, _remember_cv_path
 
 
 class MaskSecretTests(unittest.TestCase):
@@ -37,6 +37,12 @@ class AskTests(unittest.TestCase):
         mock_ask.return_value = '"<"'
         self.assertIsNone(_ask("label"))
 
+    @patch("jobhunter.cli.setup.Prompt.ask")
+    def test_quit_raises_keyboard_interrupt(self, mock_ask):
+        mock_ask.return_value = "q"
+        with self.assertRaises(KeyboardInterrupt):
+            _ask("label")
+
 
 class AskSecretTests(unittest.TestCase):
     @patch("jobhunter.cli.setup.Prompt.ask")
@@ -65,6 +71,25 @@ class AskSecretTests(unittest.TestCase):
         _ask_secret("  Clave", "")
         label = mock_ask.call_args.args[0]
         self.assertNotIn("***", label)
+
+    @patch("jobhunter.cli.setup.Prompt.ask")
+    def test_quit_raises_keyboard_interrupt(self, mock_ask):
+        mock_ask.return_value = "q"
+        with self.assertRaises(KeyboardInterrupt):
+            _ask_secret("  Clave", "old")
+
+
+class RecentCvPathTests(unittest.TestCase):
+    def test_adds_new_path_first_without_duplicates(self):
+        cfg = {"cv_recent_paths": [r"C:\tmp\uno.pdf", r"C:\tmp\dos.pdf"]}
+        _remember_cv_path(cfg, r"C:\tmp\tres.pdf")
+        self.assertEqual(cfg["cv_recent_paths"][0], r"C:\tmp\tres.pdf")
+        self.assertEqual(len(cfg["cv_recent_paths"]), 3)
+
+    def test_moves_existing_path_to_front(self):
+        cfg = {"cv_recent_paths": [r"C:\tmp\uno.pdf", r"C:\tmp\dos.pdf"]}
+        _remember_cv_path(cfg, r"C:\tmp\uno.pdf")
+        self.assertEqual(cfg["cv_recent_paths"], [r"C:\tmp\uno.pdf", r"C:\tmp\dos.pdf"])
 
 
 if __name__ == "__main__":
