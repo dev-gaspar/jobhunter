@@ -180,16 +180,26 @@ def cmd_setup():
             if not key:
                 console.print("  [red]Obligatoria.[/red]")
                 continue
-            key = key.replace(" ", "")
+            key = key.replace(" ", "").strip()
             with console.status("  [dim]Verificando...[/dim]"):
                 try:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
-                    requests.post(url, json={"contents": [{"parts": [{"text": "test"}]}]}, timeout=10).raise_for_status()
-                    cfg["gemini_api_key"] = key
-                    console.print("  [green]>[/green] Clave valida")
+                    payload = {"contents": [{"parts": [{"text": "test"}]}]}
+                    last_err = None
+                    for m in GEMINI_MODELS:
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key}"
+                        r = requests.post(url, json=payload, timeout=15)
+                        if r.status_code == 200:
+                            cfg["gemini_api_key"] = key
+                            console.print("  [green]>[/green] Clave valida")
+                            break
+                        last_err = f"{r.status_code} {r.text[:150]}"
+                    else:
+                        raise RuntimeError(last_err)
                     break
-                except Exception:
-                    console.print("  [red]![/red] Clave invalida. Intenta de nuevo.")
+                except requests.RequestException as e:
+                    console.print("  [red]![/red] Error al verificar (red/proxy): " + str(e))
+                except Exception as e:
+                    console.print("  [red]![/red] Clave invalida: " + str(e))
         console.print()
         current = cfg.get("gemini_model", "gemini-2.5-flash")
         console.print(f"  [bold]Modelo[/bold] [dim](Enter para mantener {current})[/dim]")
