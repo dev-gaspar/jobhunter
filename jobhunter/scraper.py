@@ -163,21 +163,23 @@ def scrape_posts(page, query, max_scroll=4, time_filter="24h"):
     return posts
 
 
-def do_linkedin_login():
+def do_linkedin_login(interactive=True):
     """Flujo compartido de login en LinkedIn. Retorna True si la sesion quedo guardada.
 
     Abre Chrome persistente con Playwright, espera a /feed o /in (max 5min),
     soporta 2FA. Cierra el navegador explicitamente para grabar cookies.
+    Con interactive=False (GUI) no imprime instrucciones ni espera Enter.
     """
     kill_playwright_zombies()
     os.makedirs(SESSION_DIR, exist_ok=True)
     chrome = find_chrome()
-    console.print("  1. Se abrira Chrome")
-    console.print("  2. Inicia sesion con [bold]correo y contrasena[/bold]")
-    console.print("     [red]NO uses el boton de Google[/red] (bloqueado en automatizado)")
-    console.print("  3. Si pide [bold]verificacion en dos pasos[/bold], completala en tu celular/email")
-    console.print("  4. NO cierres el navegador. Se cerrara [bold]automaticamente[/bold] cuando la sesion este lista")
-    input("\n  Presiona Enter para abrir el navegador...")
+    if interactive:
+        console.print("  1. Se abrira Chrome")
+        console.print("  2. Inicia sesion con [bold]correo y contrasena[/bold]")
+        console.print("     [red]NO uses el boton de Google[/red] (bloqueado en automatizado)")
+        console.print("  3. Si pide [bold]verificacion en dos pasos[/bold], completala en tu celular/email")
+        console.print("  4. NO cierres el navegador. Se cerrara [bold]automaticamente[/bold] cuando la sesion este lista")
+        input("\n  Presiona Enter para abrir el navegador...")
 
     success = False
     with sync_playwright() as p:

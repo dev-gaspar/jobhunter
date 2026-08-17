@@ -14,20 +14,26 @@ import base64
 import json
 import os
 import random
+import re
+import smtplib
 import time
 from datetime import datetime
 
+import requests
 from playwright.sync_api import sync_playwright
 
 from jobhunter.agents.cv import agent_cv
 from jobhunter.agents.email import agent_email
 from jobhunter.agents.filter import agent_filter
+from jobhunter.agents.query_generator import generate_queries
+from jobhunter.ai.gemini import call_gemini_vision
 from jobhunter.browser import find_chrome, kill_playwright_zombies
+from jobhunter.config import save_config
 from jobhunter.constants import BASE_DIR, SESSION_DIR
 from jobhunter.cv.builder import generate_cv_pdf, get_cv_filename
 from jobhunter.mailer import domain_accepts_mail, send_email
 from jobhunter.offers import deduplicate_offers_by_title_company, was_already_applied
-from jobhunter.scraper import scrape_posts
+from jobhunter.scraper import do_linkedin_login, scrape_posts
 from jobhunter.storage import save_kb
 
 
@@ -219,6 +225,79 @@ def search_offers(cfg, kb, time_filter="24h", on_event=None, pace=True):
                    "detail": str(len(offers_with_email)) + " ofertas finales", "total": None})
 
     return {"offers": offers_with_email, "stats": stats, "decisions": decisions, "error": None}
+
+
+CV_EXTRACT_PROMPT = """Lee este CV/resume y extrae TODA la informacion en JSON.
+Adapta las categorias de skills al perfil real de la persona (no asumas que es tech).
+{"name":"","title":"titulo profesional","email":"","phone":"","linkedin":"","portfolio":"","location":"",
+"summary":"resumen profesional completo",
+"skills": "objeto con categorias relevantes al perfil, ej: para tech {backend:[],frontend:[]}, para marketing {estrategia:[],herramientas:[]}, para diseno {tools:[],especialidades:[]}, etc.",
+"experience":[{"company":"","role":"","period":"","description":"descripcion completa de logros y responsabilidades"}],
+"education":[{"institution":"","degree":"","period":""}],
+"projects":[{"name":"","description":"","tech":[]}],"achievements":[]}
+SOLO JSON valido."""
+
+
+def validate_gemini_key(key):
+    """Valida una API key de Gemini con una llamada de prueba (como el setup)."""
+    key = (key or "").replace(" ", "")
+    if not key:
+        return {"ok": False, "error": "La clave es obligatoria."}
+    try:
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + key
+        r = requests.post(url, json={"contents": [{"parts": [{"text": "test"}]}]}, timeout=10)
+        r.raise_for_status()
+        return {"ok": True, "error": None}
+    except Exception as e:
+        return {"ok": False, "error": "Clave invalida. Revisa que sea correcta. (" + str(e) + ")"}
+
+
+def verify_smtp(email, password):
+    """Verifica Gmail + App Password contra el SMTP real (como el setup)."""
+    email = (email or "").strip()
+    password = (password or "").replace(" ", "")
+    if not re.match(r"^[^@]+@gmail\.com$", email):
+        return {"ok": False, "error": "Debe ser una cuenta @gmail.com"}
+    if not password or len(password) < 10:
+        return {"ok": False, "error": "La contrasena de aplicacion tiene 16 caracteres"}
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as s:
+            s.starttls()
+            s.login(email, password)
+        return {"ok": True, "error": None}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def extract_profile_from_cv(cfg, pdf_b64):
+    """Extrae el perfil desde un CV en PDF (base64) con Gemini vision."""
+    try:
+        result = call_gemini_vision(cfg, CV_EXTRACT_PROMPT, pdf_b64, "application/pdf")
+        parsed = json.loads(result)
+        if not parsed.get("name"):
+            return {"ok": False, "profile": None,
+                    "error": "No se pudo extraer informacion del CV. Verifica que el PDF sea legible."}
+        return {"ok": True, "profile": parsed, "error": None}
+    except Exception as e:
+        return {"ok": False, "profile": None, "error": str(e)}
+
+
+def linkedin_login():
+    """Login de LinkedIn para GUI (sin input de terminal). Retorna bool."""
+    return do_linkedin_login(interactive=False)
+
+
+def has_linkedin_session():
+    """True si existe una sesion persistente de LinkedIn."""
+    return os.path.exists(SESSION_DIR)
+
+
+def regenerate_queries(cfg):
+    """Genera queries de busqueda con IA, las guarda en cfg y persiste."""
+    queries, from_ai = generate_queries(cfg)
+    cfg["search_queries"] = queries
+    save_config(cfg)
+    return {"queries": queries, "from_ai": from_ai}
 
 
 def prepare_application(cfg, job, test_email=None, on_event=None, pace=True):

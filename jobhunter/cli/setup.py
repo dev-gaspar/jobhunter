@@ -4,17 +4,16 @@ import base64
 import json
 import os
 import re
-import smtplib
 
-import requests
 from rich.panel import Panel
 from rich.prompt import Prompt
 
-from jobhunter.ai.gemini import call_gemini, call_gemini_vision
+from jobhunter.ai.gemini import call_gemini
 from jobhunter.banner import get_banner
 from jobhunter.config import load_config, save_config
 from jobhunter.constants import BACK, GEMINI_MODELS, SESSION_DIR
 from jobhunter.scraper import do_linkedin_login
+from jobhunter.service import extract_profile_from_cv, validate_gemini_key, verify_smtp
 from jobhunter.ui import console
 
 
@@ -182,14 +181,12 @@ def cmd_setup():
                 continue
             key = key.replace(" ", "")
             with console.status("  [dim]Verificando...[/dim]"):
-                try:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
-                    requests.post(url, json={"contents": [{"parts": [{"text": "test"}]}]}, timeout=10).raise_for_status()
-                    cfg["gemini_api_key"] = key
-                    console.print("  [green]>[/green] Clave valida")
-                    break
-                except Exception:
-                    console.print("  [red]![/red] Clave invalida. Intenta de nuevo.")
+                res = validate_gemini_key(key)
+            if res["ok"]:
+                cfg["gemini_api_key"] = key
+                console.print("  [green]>[/green] Clave valida")
+                break
+            console.print("  [red]![/red] Clave invalida. Intenta de nuevo.")
         console.print()
         current = cfg.get("gemini_model", "gemini-2.5-flash")
         console.print(f"  [bold]Modelo[/bold] [dim](Enter para mantener {current})[/dim]")
@@ -221,16 +218,13 @@ def cmd_setup():
                 console.print("  [red]![/red] Minimo 16 caracteres")
                 continue
             with console.status("  [dim]Verificando SMTP...[/dim]"):
-                try:
-                    with smtplib.SMTP("smtp.gmail.com", 587) as s:
-                        s.starttls()
-                        s.login(email, pwd)
-                    cfg["smtp_email"] = email
-                    cfg["smtp_password"] = pwd
-                    console.print("  [green]>[/green] SMTP verificado")
-                    return
-                except Exception as e:
-                    console.print(f"  [red]![/red] {e}")
+                res = verify_smtp(email, pwd)
+            if res["ok"]:
+                cfg["smtp_email"] = email
+                cfg["smtp_password"] = pwd
+                console.print("  [green]>[/green] SMTP verificado")
+                return
+            console.print(f"  [red]![/red] {res['error']}")
 
     def step_cv():
         _setup_screen(8, TOTAL, "Tu CV actual", "Ruta al archivo PDF \u2014 OBLIGATORIO")
@@ -255,35 +249,23 @@ def cmd_setup():
                 console.print(f"  [red]![/red] No se pudo leer el archivo: {e}")
                 continue
             with console.status("  [dim]Leyendo CV con Gemini AI...[/dim]"):
-                try:
-                    result = call_gemini_vision(cfg, """Lee este CV/resume y extrae TODA la informacion en JSON.
-Adapta las categorias de skills al perfil real de la persona (no asumas que es tech).
-{"name":"","title":"titulo profesional","email":"","phone":"","linkedin":"","portfolio":"","location":"",
-"summary":"resumen profesional completo",
-"skills": "objeto con categorias relevantes al perfil, ej: para tech {backend:[],frontend:[]}, para marketing {estrategia:[],herramientas:[]}, para diseno {tools:[],especialidades:[]}, etc.",
-"experience":[{"company":"","role":"","period":"","description":"descripcion completa de logros y responsabilidades"}],
-"education":[{"institution":"","degree":"","period":""}],
-"projects":[{"name":"","description":"","tech":[]}],"achievements":[]}
-SOLO JSON valido.""", b64, "application/pdf")
-                    nonlocal profile
-                    parsed = json.loads(result)
-                    if not parsed.get("name"):
-                        console.print(f"  [red]![/red] El CV parece invalido o la IA no pudo extraer datos. Verifica el PDF.")
-                        continue
-                    user_portfolio = profile.get("portfolio", "")
-                    user_linkedin = profile.get("linkedin", "")
-                    profile = parsed
-                    if user_portfolio:
-                        profile["portfolio"] = user_portfolio
-                    if user_linkedin:
-                        profile["linkedin"] = user_linkedin
-                    cfg["cv_path"] = cv
-                    console.print(f"  [green]>[/green] CV leido \u2014 {profile.get('name', '?')}")
-                    return
-                except Exception as e:
-                    console.print(f"  [red]![/red] Error al procesar con IA: {e}")
-                    console.print("  [dim]Intenta con otro PDF o revisa que la clave de Gemini sea valida.[/dim]")
-                    continue
+                res = extract_profile_from_cv(cfg, b64)
+            nonlocal profile
+            if not res["ok"]:
+                console.print(f"  [red]![/red] {res['error']}")
+                console.print("  [dim]Intenta con otro PDF o revisa que la clave de Gemini sea valida.[/dim]")
+                continue
+            parsed = res["profile"]
+            user_portfolio = profile.get("portfolio", "")
+            user_linkedin = profile.get("linkedin", "")
+            profile = parsed
+            if user_portfolio:
+                profile["portfolio"] = user_portfolio
+            if user_linkedin:
+                profile["linkedin"] = user_linkedin
+            cfg["cv_path"] = cv
+            console.print(f"  [green]>[/green] CV leido \u2014 {profile.get('name', '?')}")
+            return
 
     def step_linkedin_login():
         _setup_screen(9, TOTAL, "Login en LinkedIn", "Se abrira Chrome para iniciar sesion")
