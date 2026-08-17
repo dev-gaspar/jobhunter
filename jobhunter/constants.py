@@ -21,7 +21,7 @@ CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 SESSION_DIR = os.path.join(BASE_DIR, ".session")
 KB_PATH = os.path.join(BASE_DIR, "knowledge.json")
 
-VERSION = "2.0.0"
+VERSION = "2.0.1"
 
 GEMINI_MODELS = [
     "gemini-2.5-flash",
