@@ -24,3 +24,12 @@ venv/
 # Claude
 .claude/
 config.json.bak
+
+# Build de la app desktop (generados por gen_assets.py / PyInstaller / Inno)
+build/
+dist/
+desktop/packaging/icon.ico
+desktop/packaging/wizard-side.bmp
+desktop/packaging/wizard-small.bmp
+desktop/packaging/MicrosoftEdgeWebView2Setup.exe
+cv_*.pdf

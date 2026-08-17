@@ -1,0 +1,28 @@
+# UTF-8
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(2, 0, 0, 0),
+    prodvers=(2, 0, 0, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo([
+      StringTable('040a04b0', [
+        StringStruct('CompanyName', 'JobHunter AI'),
+        StringStruct('FileDescription', 'JobHunter - Busqueda de empleo automatizada con IA'),
+        StringStruct('FileVersion', '2.0.0'),
+        StringStruct('InternalName', 'JobHunter'),
+        StringStruct('LegalCopyright', 'MIT License - dev-gaspar'),
+        StringStruct('OriginalFilename', 'JobHunter.exe'),
+        StringStruct('ProductName', 'JobHunter'),
+        StringStruct('ProductVersion', '2.0.0')
+      ])
+    ]),
+    VarFileInfo([VarStruct('Translation', [1034, 1200])])
+  ]
+)
