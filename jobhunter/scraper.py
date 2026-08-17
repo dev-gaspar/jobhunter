@@ -2,6 +2,7 @@
 """Scraping de LinkedIn via Playwright y login persistente."""
 import os
 import random
+import re
 import time
 import urllib.parse
 
@@ -163,6 +164,52 @@ def scrape_posts(page, query, max_scroll=4, time_filter="24h"):
     return posts
 
 
+LOGGED_IN_URL_RE = re.compile(r"(/feed|/in/|linkedin\.com/home)")
+
+
+def linkedin_session_ready(browser, page=None):
+    """True si el contexto ya tiene sesion util de LinkedIn.
+
+    La senal autoritativa es la cookie li_at: es lo que hace que la sesion
+    funcione, y no depende de en que pestana o ventana haya ocurrido el login.
+    La URL queda como respaldo por si cookies() falla.
+    """
+    try:
+        for c in browser.cookies():
+            if c.get("name") == "li_at" and c.get("value"):
+                return True
+    except Exception:
+        pass
+    if page is not None:
+        try:
+            return bool(LOGGED_IN_URL_RE.search(page.url))
+        except Exception:
+            return False
+    return False
+
+
+def wait_for_linkedin_session(browser, page, timeout_s=300, poll_ms=2000):
+    """Espera a que el login quede listo. Retorna True si hay sesion.
+
+    IMPORTANTE: la pausa se hace con page.wait_for_timeout, NO con time.sleep.
+    En la API sync de Playwright, page.url es un valor CACHEADO que solo se
+    refresca cuando el bucle de eventos del driver procesa mensajes; time.sleep
+    bloquea el hilo sin bombearlo, de modo que una navegacion hecha por el
+    USUARIO (completar el login) nunca llegaba al lado de Python y el login
+    valido se reportaba como fallido tras agotar el timeout.
+    """
+    start = time.monotonic()
+    while time.monotonic() - start < timeout_s:
+        if linkedin_session_ready(browser, page):
+            return True
+        try:
+            page.wait_for_timeout(poll_ms)
+        except Exception:
+            # La pestana se cerro: la sesion puede estar guardada de todos modos.
+            return linkedin_session_ready(browser, None)
+    return linkedin_session_ready(browser, None)
+
+
 def do_linkedin_login(interactive=True):
     """Flujo compartido de login en LinkedIn. Retorna True si la sesion quedo guardada.
 
@@ -192,19 +239,16 @@ def do_linkedin_login(interactive=True):
             page.goto("https://www.linkedin.com/login")
         except Exception:
             pass
-        console.print("  [dim]Esperando que completes el login y el 2FA (hasta 5 minutos)...[/dim]")
+        if interactive:
+            console.print("  [dim]Esperando que completes el login y el 2FA (hasta 5 minutos)...[/dim]")
 
-        start = time.time()
-        while time.time() - start < 300:
+        success = wait_for_linkedin_session(browser, page)
+        if success:
+            # Margen para que LinkedIn termine de asentar la sesion antes de cerrar.
             try:
-                url = page.url
-                if "/feed" in url or "/in/" in url or "linkedin.com/home" in url:
-                    time.sleep(3)
-                    success = True
-                    break
-                time.sleep(2)
+                page.wait_for_timeout(3000)
             except Exception:
-                break
+                pass
 
         try:
             browser.close()
