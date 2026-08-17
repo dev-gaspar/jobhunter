@@ -1,39 +1,152 @@
 # -*- coding: utf-8 -*-
-"""Pipeline principal: scrape LinkedIn -> filtrar -> generar CV/email -> enviar.
+"""Pipeline principal (frontend de terminal): consume la fachada service.py.
 
-Orquesta las 3 fases sobre los adapters (scraper, agents, mailer) y persiste
-el historial en knowledge.json. Se invoca desde cli/main via cmd_run.
+Renderiza banner, progreso Rich, tabla de ofertas y seleccion interactiva;
+la logica de scrape/analisis/filtros vive en jobhunter.service.
 """
-import base64
 import csv
 import json
 import os
-import random
-import shutil
 import time
-from datetime import datetime
 
-from playwright.sync_api import sync_playwright
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
-from rich.prompt import Confirm, Prompt
+from rich.prompt import Prompt
 from rich.table import Table
+import shutil
 
 from jobhunter.applying import apply_to_offer
-from jobhunter.offers import (
-    deduplicate_offers_by_title_company,
-    extract_emails,
-    was_already_applied,
-)
-
-from jobhunter.agents.filter import agent_filter
 from jobhunter.banner import get_banner
-from jobhunter.browser import find_chrome, kill_playwright_zombies
 from jobhunter.config import is_configured, load_config
-from jobhunter.constants import BASE_DIR, SESSION_DIR
-from jobhunter.scraper import scrape_posts
-from jobhunter.storage import load_kb, save_kb
+from jobhunter.service import record_run, search_offers, write_run_log
+from jobhunter.storage import load_kb
 from jobhunter.ui import console
+
+
+def _print_decision(d):
+    """Linea inline por decision del filtro (mismo formato historico)."""
+    company = (d.get("company") or "").strip()
+    title = (d.get("job_title") or "").strip()
+    reason = (d.get("relevance_reason") or "").strip()
+    if d.get("is_job") and d.get("is_relevant", True):
+        label = f"    [green]✓[/green] {company or '-'} [dim]—[/dim] {title or '-'}"
+    elif d.get("is_job"):
+        short = reason[:90] or "no relevante"
+        head = f"{company or '-'} — {title or '-'}" if (company or title) else "oferta no relevante"
+        label = f"    [yellow]–[/yellow] [dim]{head}[/dim] [yellow]·[/yellow] [yellow]{short}[/yellow]"
+    else:
+        short = reason[:100] or "no es oferta"
+        label = f"    [dim red]✗[/dim red] [dim]{short}[/dim]"
+    console.print(label)
+
+
+class _RichEvents:
+    """Traduce eventos de la fachada a Progress/prints de Rich."""
+
+    def __init__(self):
+        self.prog = None
+        self.task = None
+
+    def _start_progress(self, description, total):
+        self.prog = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=30),
+            TextColumn("{task.completed}/{task.total}"),
+            TimeElapsedColumn(),
+            console=console,
+        )
+        self.prog.start()
+        self.task = self.prog.add_task(description, total=total)
+
+    def _stop_progress(self, total):
+        if self.prog is not None:
+            self.prog.update(self.task, completed=total)
+            self.prog.stop()
+            self.prog = None
+
+    def __call__(self, name, payload):
+        if name == "phase":
+            phase = payload["phase"]
+            if payload["status"] == "start":
+                if phase == "scrape":
+                    console.print()
+                    console.print("  [bold dim]Buscando en LinkedIn...[/bold dim]")
+                    self._start_progress("Buscando...", payload.get("total") or 0)
+                elif phase == "analyze":
+                    console.print()
+                    console.print("  [bold dim]Analizando ofertas...[/bold dim]")
+                    self._start_progress("Analizando...", payload.get("total") or 0)
+            elif payload["status"] == "done" and phase in ("scrape", "analyze"):
+                self._stop_progress(payload.get("total") or 0)
+        elif name == "progress" and self.prog is not None:
+            msg = (payload.get("msg") or "")[:45]
+            self.prog.update(self.task, description=f"[dim]{msg}[/dim]",
+                             completed=payload.get("current", 0))
+        elif name == "decision":
+            _print_decision(d=payload)
+
+
+def _print_offers_table(offers):
+    tw = shutil.get_terminal_size((80, 24)).columns
+    wide = tw >= 100
+    extra_wide = tw >= 130
+    table = Table(border_style="cyan", title="[bold]Ofertas encontradas[/bold]",
+                  expand=False, show_lines=False, padding=(0, 1))
+    table.add_column("#", style="dim", width=3, justify="right")
+    table.add_column("Puesto", max_width=28 if wide else 20, style="bold")
+    table.add_column("Empresa", max_width=16 if wide else 12)
+    table.add_column("Modo", width=10)
+    if wide:
+        table.add_column("Ubicacion", max_width=18, style="dim")
+        table.add_column("Lang", width=4, style="dim")
+    if extra_wide:
+        table.add_column("Salario", max_width=18, style="green")
+    table.add_column("Email", max_width=26 if wide else 22, style="cyan")
+    table.add_column("Post", max_width=20 if wide else 6, justify="left" if wide else "center")
+    mode_icons = {"remote": "[green]Remoto[/green]", "hybrid": "[yellow]Hibrido[/yellow]",
+                  "onsite": "[red]Onsite[/red]", "unknown": "[dim]—[/dim]"}
+    for i, o in enumerate(offers, 1):
+        wm = mode_icons.get(o.get("work_mode", "unknown"), "[dim]—[/dim]")
+        loc = o.get("location") or "—"
+        if loc.lower() in ("null", "none", "n/a", "no especificado", "no mencionado"):
+            loc = "—"
+        la = (o.get("language", "?"))[:4].upper()
+        salary = o.get("salary") or "—"
+        if str(salary).lower() in ("null", "none", "n/a", "no mencionado", "no especificado"):
+            salary = "—"
+        if o.get("post_url"):
+            shown = o["post_url"].replace("https://", "") if wide else "Ver"
+            post_link = f"[link={o['post_url']}]{shown}[/link]"
+        else:
+            post_link = "[dim]—[/dim]"
+        if extra_wide:
+            table.add_row(str(i), o["job_title"][:28], o["company"][:16], wm, loc[:18], la,
+                          str(salary)[:18], o["contact_email"], post_link)
+        elif wide:
+            table.add_row(str(i), o["job_title"][:28], o["company"][:16], wm, loc[:18], la,
+                          o["contact_email"], post_link)
+        else:
+            table.add_row(str(i), o["job_title"][:20], o["company"][:12], wm,
+                          o["contact_email"], post_link)
+    console.print(table)
+
+
+def _export_offers(offers, export_fmt, export_path):
+    os.makedirs(os.path.dirname(os.path.abspath(export_path)) or ".", exist_ok=True)
+    export_fields = ["job_title", "company", "contact_email", "work_mode", "location",
+                     "salary", "language", "post_url"]
+    if export_fmt == "csv":
+        with open(export_path, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=export_fields, extrasaction="ignore")
+            w.writeheader()
+            w.writerows(offers)
+        console.print(f"  [green]>[/green] Exportado: {export_path}")
+    elif export_fmt == "json":
+        export_data = [{k: o.get(k) for k in export_fields} for o in offers]
+        with open(export_path, "w", encoding="utf-8") as f:
+            json.dump(export_data, f, indent=2, ensure_ascii=False)
+        console.print(f"  [green]>[/green] Exportado: {export_path}")
 
 
 def cmd_run(
@@ -50,6 +163,7 @@ def cmd_run(
     if not is_configured():
         console.print("  [red]✗[/red] Falta configuracion. Ejecuta: [cyan]jobhunter setup[/cyan]")
         return
+    from jobhunter.constants import SESSION_DIR
     if not os.path.exists(SESSION_DIR):
         console.print("  [red]✗[/red] Sin sesion LinkedIn. Ejecuta: [cyan]jobhunter login[/cyan]")
         return
@@ -68,253 +182,61 @@ def cmd_run(
         border_style="cyan", title="[bold]Sesion[/bold]"
     ))
 
-    kill_playwright_zombies()
-    queries = cfg.get("search_queries", ["enviar CV backend developer"])
+    events = _RichEvents()
+    result = search_offers(cfg, kb, time_filter=time_filter, on_event=events, pace=True)
+    if events.prog is not None:  # por si un error corto el flujo a mitad de fase
+        events.prog.stop()
 
-    # ── Phase 1: Scrape ──
-    console.print()
-    console.print("  [bold dim]Buscando en LinkedIn...[/bold dim]")
-    all_posts = []
-    seen = set()
+    stats = result["stats"]
+    decisions = result["decisions"]
 
-    try:
-        with sync_playwright() as p:
-            chrome = find_chrome()
-            browser = p.chromium.launch_persistent_context(
-                user_data_dir=SESSION_DIR, headless=True,
-                viewport={"width":1300,"height":850}, executable_path=chrome,
-                permissions=["clipboard-read", "clipboard-write"],
+    if result["error"]:
+        kind = result["error"]["kind"]
+        if kind == "cancelled":
+            console.print("\n  [dim]Cancelado.[/dim]")
+        elif kind == "session_expired":
+            console.print("  [red]![/red] Sesion expirada. Ejecuta: [cyan]jobhunter login[/cyan]")
+        elif kind == "no_posts":
+            console.print(
+                f"  [bold]{stats.get('posts_scraped', 0)}[/bold] posts  ·  "
+                f"[bold]{stats.get('posts_with_emails', 0)}[/bold] con email  ·  "
+                f"[dim]{stats.get('posts_no_emails', 0)} sin email (omitidos)[/dim]"
             )
-            page = browser.pages[0] if browser.pages else browser.new_page()
-            page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded")
-            page.wait_for_timeout(4000)
-
-            if "login" in page.url or "signin" in page.url:
-                console.print("  [red]![/red] Sesion expirada. Ejecuta: [cyan]jobhunter login[/cyan]")
-                browser.close(); return
-
-            total_q = len(queries)
-            total_emails_found = 0
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(bar_width=30),
-                TextColumn("{task.completed}/{task.total}"),
-                TimeElapsedColumn(),
-                console=console,
-            ) as prog:
-                task = prog.add_task("Buscando...", total=total_q)
-                for qi, query in enumerate(queries, 1):
-                    prog.update(task, description=f"[dim]{query[:45]}[/dim]")
-                    posts = scrape_posts(page, query, time_filter=time_filter)
-                    for pi in posts:
-                        key = pi["text"][:150]
-                        if key not in seen:
-                            seen.add(key)
-                            pi["query"] = query
-                            all_posts.append(pi)
-                    total_emails_found = sum(len(p.get("emails_found",[])) for p in all_posts)
-                    prog.advance(task)
-                    time.sleep(random.uniform(2, 5))
-
-            # Screenshots (optional, quick)
-            text_boxes = page.query_selector_all('span[data-testid="expandable-text-box"]')
-            for post in all_posts:
-                post["screenshots"] = []
-                try:
-                    if post["index"] < len(text_boxes):
-                        ss = text_boxes[post["index"]].screenshot()
-                        post["screenshots"].append(base64.b64encode(ss).decode())
-                except: pass
-
-            browser.close()
-    except KeyboardInterrupt:
-        console.print("\n  [dim]Cancelado.[/dim]")
+            console.print()
+            console.print("  [yellow]![/yellow] No se encontraron posts con email. Intenta un periodo mas amplio.")
+            console.print("    [dim]Ej: jobhunter run --time week[/dim]")
+        else:
+            console.print(f"  [red]✗[/red] {result['error']['message']}")
         return
-    except Exception:
-        pass
-
-    posts_with_emails = [p for p in all_posts if p.get("emails_found")]
-    posts_no_emails = len(all_posts) - len(posts_with_emails)
-    console.print(f"  [bold]{len(all_posts)}[/bold] posts  ·  [bold]{len(posts_with_emails)}[/bold] con email  ·  [dim]{posts_no_emails} sin email (omitidos)[/dim]")
-
-    if not posts_with_emails:
-        console.print()
-        console.print("  [yellow]![/yellow] No se encontraron posts con email. Intenta un periodo mas amplio.")
-        console.print("    [dim]Ej: jobhunter run --time week[/dim]")
-        return
-
-    # ── Phase 2: Analyze (only posts with emails to save tokens) ──
-    console.print()
-    console.print("  [bold dim]Analizando ofertas...[/bold dim]")
-    offers = []
-    filter_decisions = []  # cada decision del agent_filter incluye relevance_reason
-
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
-                  BarColumn(), TextColumn("{task.completed}/{task.total}"),
-                  TimeElapsedColumn(), console=console) as prog:
-        task = prog.add_task("Analizando...", total=len(posts_with_emails))
-        for post in posts_with_emails:
-            if len(post.get("text","")) < 50:
-                filter_decisions.append({
-                    "post_url": post.get("post_url"),
-                    "post_preview": post.get("text", "")[:200],
-                    "is_job": False,
-                    "is_relevant": False,
-                    "relevance_reason": "skipped (text < 50 chars)",
-                })
-                prog.advance(task); continue
-            ss = post.get("screenshots",[None])[0] if post.get("screenshots") else None
-            a = agent_filter(cfg, post["text"], ss)
-
-            # Registrar TODAS las decisiones (aceptadas y rechazadas) para poder
-            # diagnosticar por que el filter esta descartando tanto. Sin esto el
-            # usuario ve 274 posts -> 1 oferta y no sabe que paso con los 273.
-            filter_decisions.append({
-                "post_url": post.get("post_url"),
-                "post_preview": post.get("text", "")[:200],
-                "is_job": bool(a.get("is_job")),
-                "is_relevant": bool(a.get("is_relevant", True)),
-                "relevance_reason": a.get("relevance_reason", ""),
-                "job_title": a.get("job_title"),
-                "company": a.get("company"),
-                "language": a.get("language"),
-                "work_mode": a.get("work_mode"),
-                "contact_email": a.get("contact_email"),
-            })
-
-            # Mostrar decision inline encima del progress para que el usuario vea
-            # que analiza y por que acepta/rechaza cada post.
-            company = (a.get("company") or "").strip()
-            title = (a.get("job_title") or "").strip()
-            reason = (a.get("relevance_reason") or "").strip()
-            if a.get("is_job") and a.get("is_relevant", True):
-                label = f"    [green]\u2713[/green] {company or '-'} [dim]\u2014[/dim] {title or '-'}"
-            elif a.get("is_job"):
-                short = reason[:90] or "no relevante"
-                head = f"{company or '-'} \u2014 {title or '-'}" if (company or title) else "oferta no relevante"
-                label = f"    [yellow]\u2013[/yellow] [dim]{head}[/dim] [yellow]\u00b7[/yellow] [yellow]{short}[/yellow]"
-            else:
-                short = reason[:100] or "no es oferta"
-                label = f"    [dim red]\u2717[/dim red] [dim]{short}[/dim]"
-            console.print(label)
-
-            if a.get("is_job") and a.get("is_relevant", True):
-                a["job_title"] = a.get("job_title") or "Software Developer"
-                a["company"] = a.get("company") or "Empresa"
-                a["post_url"] = post.get("post_url")
-                a["query"] = post.get("query")
-                a["author_url"] = post.get("author_url")
-                a["author_name"] = post.get("author_name")
-                offers.append(a)
-            prog.advance(task)
-            time.sleep(1.5)
-
-    # Clean emails: remove "null", "none", empty strings
-    for o in offers:
-        email = o.get("contact_email", "")
-        if not email or email.lower() in ("null", "none", "n/a", "no encontrado"):
-            o["contact_email"] = None
-
-    # Only keep offers with valid email
-    offers_with_email = [o for o in offers if o.get("contact_email")]
-    offers_no_email = [o for o in offers if not o.get("contact_email")]
-
-    # Deduplicate within this batch: same normalized title + company
-    deduped = deduplicate_offers_by_title_company(offers_with_email)
-    batch_dupes = len(offers_with_email) - len(deduped)
-    offers_with_email = deduped
-
-    # Filter blacklisted companies
-    rejected = [r.lower() for r in kb.get("rejected_companies", [])]
-    before_bl = len(offers_with_email)
-    offers_with_email = [o for o in offers_with_email if (o.get("company") or "").lower() not in rejected]
-    blacklisted = before_bl - len(offers_with_email)
-    blacklist_info = "  ·  " + str(blacklisted) + " bloqueadas" if blacklisted else ""
 
     console.print(
-        f"  [bold]{len(offers)}[/bold] ofertas  ·  "
-        f"[green]{len(offers_with_email)}[/green] con email  ·  "
-        f"[dim]{batch_dupes} duplicadas  ·  {len(offers_no_email)} sin email{blacklist_info}[/dim]"
+        f"  [bold]{stats['posts_scraped']}[/bold] posts  ·  "
+        f"[bold]{stats['posts_with_emails']}[/bold] con email  ·  "
+        f"[dim]{stats['posts_no_emails']} sin email (omitidos)[/dim]"
     )
+
+    offers = result["offers"]
+    blacklist_info = "  ·  " + str(stats["blacklisted"]) + " bloqueadas" if stats.get("blacklisted") else ""
+    console.print(
+        f"  [bold]{stats['filter_accepted']}[/bold] ofertas  ·  "
+        f"[green]{len(offers)}[/green] con email  ·  "
+        f"[dim]{stats['batch_dupes']} duplicadas  ·  {stats['offers_no_email']} sin email{blacklist_info}[/dim]"
+    )
+    if stats.get("already_applied"):
+        console.print(f"  [yellow]![/yellow] {stats['already_applied']} omitidas (ya enviadas en los ultimos 30 dias)")
     console.print()
 
-    if offers_with_email:
-        tw = shutil.get_terminal_size((80, 24)).columns
-        wide = tw >= 100
-        extra_wide = tw >= 130
-        table = Table(border_style="cyan", title="[bold]Ofertas encontradas[/bold]", expand=False, show_lines=False, padding=(0, 1))
-        table.add_column("#", style="dim", width=3, justify="right")
-        table.add_column("Puesto", max_width=28 if wide else 20, style="bold")
-        table.add_column("Empresa", max_width=16 if wide else 12)
-        table.add_column("Modo", width=10)
-        if wide:
-            table.add_column("Ubicacion", max_width=18, style="dim")
-            table.add_column("Lang", width=4, style="dim")
-        if extra_wide:
-            table.add_column("Salario", max_width=18, style="green")
-        table.add_column("Email", max_width=26 if wide else 22, style="cyan")
-        table.add_column("Post", max_width=20 if wide else 6, justify="left" if wide else "center")
-        mode_icons = {"remote": "[green]Remoto[/green]", "hybrid": "[yellow]Hibrido[/yellow]", "onsite": "[red]Onsite[/red]", "unknown": "[dim]—[/dim]"}
-        for i, o in enumerate(offers_with_email, 1):
-            wm = mode_icons.get(o.get("work_mode", "unknown"), "[dim]—[/dim]")
-            loc = o.get("location") or "—"
-            if loc.lower() in ("null", "none", "n/a", "no especificado", "no mencionado"):
-                loc = "—"
-            la = (o.get("language", "?"))[:4].upper()
-            salary = o.get("salary") or "—"
-            if str(salary).lower() in ("null", "none", "n/a", "no mencionado", "no especificado"):
-                salary = "—"
-            if o.get("post_url"):
-                shown = o["post_url"].replace("https://", "") if wide else "Ver"
-                post_link = f"[link={o['post_url']}]{shown}[/link]"
-            else:
-                post_link = "[dim]—[/dim]"
-            if extra_wide:
-                table.add_row(str(i), o["job_title"][:28], o["company"][:16], wm, loc[:18], la, str(salary)[:18], o["contact_email"], post_link)
-            elif wide:
-                table.add_row(str(i), o["job_title"][:28], o["company"][:16], wm, loc[:18], la, o["contact_email"], post_link)
-            else:
-                table.add_row(str(i), o["job_title"][:20], o["company"][:12], wm, o["contact_email"], post_link)
-        console.print(table)
-
-    if not offers_with_email:
-        console.print("  [yellow]![/yellow] No se encontraron ofertas con email de reclutador.")
+    if not offers:
+        if stats.get("already_applied") and not stats.get("offers_final"):
+            console.print("  [yellow]![/yellow] Todas las ofertas ya fueron enviadas anteriormente.")
+        else:
+            console.print("  [yellow]![/yellow] No se encontraron ofertas con email de reclutador.")
         return
 
-    # Filter duplicates: skip if same job_title + company was already applied within 30 days
-    before_dedup = len(offers_with_email)
-    offers_with_email = [
-        o for o in offers_with_email
-        if not was_already_applied(kb.get("applications", []), o.get("company", ""), o.get("job_title", ""))
-    ]
-    skipped = before_dedup - len(offers_with_email)
-    if skipped:
-        console.print(f"  [yellow]![/yellow] {skipped} omitidas (ya enviadas en los ultimos 30 dias)")
+    _print_offers_table(offers)
 
-    if not offers_with_email:
-        console.print("  [yellow]![/yellow] Todas las ofertas ya fueron enviadas anteriormente.")
-        return
-
-    # Export offers if requested
-    if export_fmt and export_path and offers_with_email:
-        os.makedirs(os.path.dirname(os.path.abspath(export_path)) or ".", exist_ok=True)
-        export_fields = ["job_title", "company", "contact_email", "work_mode", "location", "salary", "language", "post_url"]
-        if export_fmt == "csv":
-            import csv
-            with open(export_path, "w", newline="", encoding="utf-8") as f:
-                w = csv.DictWriter(f, fieldnames=export_fields, extrasaction="ignore")
-                w.writeheader()
-                w.writerows(offers_with_email)
-            console.print(f"  [green]>[/green] Exportado: {export_path}")
-        elif export_fmt == "json":
-            export_data = [{k: o.get(k) for k in export_fields} for o in offers_with_email]
-            with open(export_path, "w", encoding="utf-8") as f:
-                json.dump(export_data, f, indent=2, ensure_ascii=False)
-            console.print(f"  [green]>[/green] Exportado: {export_path}")
-
-    # Use only offers with valid email for Phase 3
-    offers = offers_with_email
+    if export_fmt and export_path:
+        _export_offers(offers, export_fmt, export_path)
 
     # ── Seleccion de ofertas (si no es modo auto) ──
     if not auto_apply:
@@ -340,7 +262,7 @@ def cmd_run(
             except (ValueError, IndexError):
                 console.print(f"  [red]✗[/red] Formato invalido. Ej: 1,3,5 o 'all'")
 
-    # ── Phase 3: Generate & Send ──
+    # ── Fase 3: Generar y enviar ──
     console.print()
     phase3_label = "Generando CVs (dry-run, sin enviar)..." if dry_run else "Generando y enviando..."
     console.print(f"  [bold dim]{phase3_label}[/bold dim]")
@@ -378,24 +300,15 @@ def cmd_run(
             console.print()
         time.sleep(1 if res["status"] == "skipped" else 2)
 
-    run_entry = {
-        "date": datetime.now().isoformat(),
-        "mode": "dry-run" if dry_run else mode,
-        "posts": len(all_posts),
-        "offers": len(offers),
-        "sent": 0 if dry_run else sent,
-    }
-    if dry_run:
-        run_entry["generated"] = generated
-    kb["runs"].append(run_entry)
-    save_kb(kb)
+    record_run(kb, mode, posts=stats["posts_scraped"], offers=len(offers), sent=sent,
+               generated=generated, dry_run=dry_run)
 
-    # Summary
+    # Resumen
     err_str = f"[red]{errors}[/red]" if errors else "[dim]0[/dim]"
     if dry_run:
         summary_body = (
-            f"  [dim]Posts scraped[/dim]       {len(all_posts)}\n"
-            f"  [dim]Analizados[/dim]          {len(posts_with_emails)}  [dim](con email)[/dim]\n"
+            f"  [dim]Posts scraped[/dim]       {stats['posts_scraped']}\n"
+            f"  [dim]Analizados[/dim]          {stats['posts_with_emails']}  [dim](con email)[/dim]\n"
             f"  [dim]Ofertas[/dim]             {len(offers)}\n"
             f"  [dim]Generados[/dim]           [bold]{generated}[/bold]  [dim](CV + email)[/dim]\n"
             f"  [dim]Enviados[/dim]            [bold]0[/bold]  [dim](dry-run)[/dim]\n"
@@ -403,8 +316,8 @@ def cmd_run(
         )
     else:
         summary_body = (
-            f"  [dim]Posts scraped[/dim]       {len(all_posts)}\n"
-            f"  [dim]Analizados[/dim]          {len(posts_with_emails)}  [dim](con email)[/dim]\n"
+            f"  [dim]Posts scraped[/dim]       {stats['posts_scraped']}\n"
+            f"  [dim]Analizados[/dim]          {stats['posts_with_emails']}  [dim](con email)[/dim]\n"
             f"  [dim]Ofertas[/dim]             {len(offers)}\n"
             f"  [dim]Enviados[/dim]            [bold green]{sent}[/bold green]\n"
             f"  [dim]Errores[/dim]             {err_str}"
@@ -414,31 +327,4 @@ def cmd_run(
         border_style="green" if errors == 0 else "yellow", title="[bold]Resumen[/bold]"
     ))
 
-    log = os.path.join(BASE_DIR, "output", "logs", f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
-    os.makedirs(os.path.dirname(log), exist_ok=True)
-    # Resumen por razon de rechazo para diagnostico rapido
-    reject_reasons = {}
-    for d in filter_decisions:
-        if not (d.get("is_job") and d.get("is_relevant", True)):
-            reason = d.get("relevance_reason") or "(sin razon)"
-            reject_reasons[reason] = reject_reasons.get(reason, 0) + 1
-    log_data = {
-        "run_date": datetime.now().isoformat(),
-        "mode": mode,
-        "stats": {
-            "posts_scraped": len(all_posts),
-            "posts_with_emails": len(posts_with_emails),
-            "filter_accepted": len(offers),
-            "filter_rejected": len(filter_decisions) - len(offers),
-            "reject_reasons_top": dict(sorted(reject_reasons.items(), key=lambda x: -x[1])[:10]),
-            "applications_attempted": len(results),
-            "sent": sent,
-            "errors": errors,
-        },
-        "filter_decisions": filter_decisions,
-        "applications": results,
-    }
-    with open(log, "w", encoding="utf-8") as f:
-        json.dump(log_data, f, indent=2, ensure_ascii=False)
-
-
+    write_run_log(mode, stats, decisions, results, sent, errors)
