@@ -19,9 +19,13 @@ from datetime import datetime
 
 from playwright.sync_api import sync_playwright
 
+from jobhunter.agents.cv import agent_cv
+from jobhunter.agents.email import agent_email
 from jobhunter.agents.filter import agent_filter
 from jobhunter.browser import find_chrome, kill_playwright_zombies
 from jobhunter.constants import BASE_DIR, SESSION_DIR
+from jobhunter.cv.builder import generate_cv_pdf, get_cv_filename
+from jobhunter.mailer import domain_accepts_mail, send_email
 from jobhunter.offers import deduplicate_offers_by_title_company, was_already_applied
 from jobhunter.scraper import scrape_posts
 from jobhunter.storage import save_kb
@@ -215,6 +219,112 @@ def search_offers(cfg, kb, time_filter="24h", on_event=None, pace=True):
                    "detail": str(len(offers_with_email)) + " ofertas finales", "total": None})
 
     return {"offers": offers_with_email, "stats": stats, "decisions": decisions, "error": None}
+
+
+def prepare_application(cfg, job, test_email=None, on_event=None, pace=True):
+    """Genera CV (PDF) + email para una oferta, con 3 reintentos por etapa.
+
+    Retorna {"ok": bool, "cv_data": dict|None, "cv_path": str|None,
+    "subject": str|None, "body": str|None, "error": str|None}.
+    Con test_email el body ya incluye el banner de datos del reclutador.
+    Eventos: ("apply_progress", {"stage": "cv"|"email", "job_title", "company"}).
+    """
+    emit = on_event or _noop
+    title = (job.get("job_title") or "Posicion")[:80]
+    company = (job.get("company") or "Empresa")[:40]
+    result = {"ok": False, "cv_data": None, "cv_path": None,
+              "subject": None, "body": None, "error": None}
+
+    emit("apply_progress", {"stage": "cv", "job_title": title, "company": company})
+    cv_data = None
+    cv_path = None
+    try:
+        for retry in range(3):
+            try:
+                cv_data = agent_cv(cfg, job)
+                cv_fn = get_cv_filename(company, title)
+                cv_path = os.path.join(BASE_DIR, "output", "cvs", cv_fn)
+                os.makedirs(os.path.dirname(cv_path), exist_ok=True)
+                generate_cv_pdf(
+                    cv_data,
+                    cfg["profile"],
+                    cv_path,
+                    title,
+                    company,
+                    language=job.get("language", "es"),
+                    template=cfg.get("cv_template", "modern"),
+                )
+                break
+            except Exception:
+                if retry == 2:
+                    raise
+                if pace:
+                    time.sleep(5)
+        result["cv_data"] = cv_data
+        result["cv_path"] = cv_path
+
+        emit("apply_progress", {"stage": "email", "job_title": title, "company": company})
+        edata = None
+        for retry in range(3):
+            try:
+                edata = agent_email(cfg, job, cv_data=cv_data)
+                break
+            except Exception:
+                if retry == 2:
+                    raise
+                if pace:
+                    time.sleep(5)
+    except Exception as e:
+        result["error"] = str(e)
+        return result
+
+    body = edata["body"]
+    if test_email:
+        rec_email = job.get("contact_email")
+        banner = "--- RECLUTADOR: " + str(job.get("contact_name", "?")) + \
+                 " | EMAIL: " + str(rec_email or "?") + " | " + company + " ---"
+        body = banner + "\n\n" + body
+
+    result["ok"] = True
+    result["subject"] = edata["subject"]
+    result["body"] = body
+    return result
+
+
+def check_recipient(email):
+    """True si el dominio recibe correo, False si no, None si no verificable."""
+    return domain_accepts_mail(email)
+
+
+def send_application(cfg, kb, job, prepared, to, mode="run", recruiter_email=None):
+    """Envia la aplicacion preparada y la registra en kb['applications'].
+
+    NO persiste kb a disco (el caller decide cuando). Retorna
+    {"status": "sent"|"error", "error": str|None, "entry": dict|None}.
+    """
+    title = (job.get("job_title") or "Posicion")[:80]
+    company = (job.get("company") or "Empresa")[:40]
+    if recruiter_email is None:
+        recruiter_email = job.get("contact_email")
+    try:
+        send_email(cfg, to, prepared["subject"], prepared["body"], prepared["cv_path"])
+    except Exception as e:
+        return {"status": "error", "error": str(e), "entry": None}
+    entry = {
+        "date": datetime.now().isoformat(),
+        "job_title": title,
+        "company": company,
+        "recruiter_email": recruiter_email,
+        "sent_to": to,
+        "mode": mode,
+        "post_url": job.get("post_url"),
+        "subject": prepared["subject"],
+        "query": job.get("query"),
+        "author_url": job.get("author_url"),
+        "author_name": job.get("author_name"),
+    }
+    kb["applications"].append(entry)
+    return {"status": "sent", "error": None, "entry": entry}
 
 
 def record_run(kb, mode, posts, offers, sent, generated=None, dry_run=False):

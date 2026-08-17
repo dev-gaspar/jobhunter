@@ -20,13 +20,13 @@ def _job():
 
 
 class ApplyToOfferTests(unittest.TestCase):
-    @patch("jobhunter.applying.domain_accepts_mail", return_value=True)
+    @patch("jobhunter.service.domain_accepts_mail", return_value=True)
     @patch("jobhunter.applying.console")
-    @patch("jobhunter.applying.send_email")
-    @patch("jobhunter.applying.agent_email", return_value={"subject": "Asunto X", "body": "Cuerpo"})
-    @patch("jobhunter.applying.generate_cv_pdf")
-    @patch("jobhunter.applying.get_cv_filename", return_value="cv.pdf")
-    @patch("jobhunter.applying.agent_cv", return_value={"title": "cv"})
+    @patch("jobhunter.service.send_email")
+    @patch("jobhunter.service.agent_email", return_value={"subject": "Asunto X", "body": "Cuerpo"})
+    @patch("jobhunter.service.generate_cv_pdf")
+    @patch("jobhunter.service.get_cv_filename", return_value="cv.pdf")
+    @patch("jobhunter.service.agent_cv", return_value={"title": "cv"})
     def test_sent_appends_to_kb_with_subject_and_mode(self, _cv, _fn, _pdf, _em, mock_send, _c, _mx):
         kb = {"applications": []}
         job = dict(_job(), query="Vacante AI remoto", author_url="https://linkedin.com/in/rec", author_name="Reclutadora X")
@@ -44,11 +44,11 @@ class ApplyToOfferTests(unittest.TestCase):
         self.assertEqual(app["author_name"], "Reclutadora X")
 
     @patch("jobhunter.applying.console")
-    @patch("jobhunter.applying.send_email")
-    @patch("jobhunter.applying.agent_email", return_value={"subject": "S", "body": "B"})
-    @patch("jobhunter.applying.generate_cv_pdf")
-    @patch("jobhunter.applying.get_cv_filename", return_value="cv.pdf")
-    @patch("jobhunter.applying.agent_cv", return_value={})
+    @patch("jobhunter.service.send_email")
+    @patch("jobhunter.service.agent_email", return_value={"subject": "S", "body": "B"})
+    @patch("jobhunter.service.generate_cv_pdf")
+    @patch("jobhunter.service.get_cv_filename", return_value="cv.pdf")
+    @patch("jobhunter.service.agent_cv", return_value={})
     def test_dry_run_does_not_send_nor_persist(self, _cv, _fn, _pdf, _em, mock_send, _c):
         kb = {"applications": []}
         res = apply_to_offer(_cfg(), kb, _job(), dry_run=True, interactive=False)
@@ -58,8 +58,8 @@ class ApplyToOfferTests(unittest.TestCase):
         self.assertTrue(res["record"].get("dry_run"))
 
     @patch("jobhunter.applying.console")
-    @patch("jobhunter.applying.time.sleep")
-    @patch("jobhunter.applying.agent_cv", side_effect=RuntimeError("boom"))
+    @patch("jobhunter.service.time.sleep")
+    @patch("jobhunter.service.agent_cv", side_effect=RuntimeError("boom"))
     def test_generation_error_returns_error(self, _cv, _sleep, _c):
         kb = {"applications": []}
         res = apply_to_offer(_cfg(), kb, _job(), interactive=False)
@@ -67,11 +67,11 @@ class ApplyToOfferTests(unittest.TestCase):
         self.assertEqual(kb["applications"], [])
 
     @patch("jobhunter.applying.console")
-    @patch("jobhunter.applying.send_email")
-    @patch("jobhunter.applying.agent_email", return_value={"subject": "S", "body": "B"})
-    @patch("jobhunter.applying.generate_cv_pdf")
-    @patch("jobhunter.applying.get_cv_filename", return_value="cv.pdf")
-    @patch("jobhunter.applying.agent_cv", return_value={})
+    @patch("jobhunter.service.send_email")
+    @patch("jobhunter.service.agent_email", return_value={"subject": "S", "body": "B"})
+    @patch("jobhunter.service.generate_cv_pdf")
+    @patch("jobhunter.service.get_cv_filename", return_value="cv.pdf")
+    @patch("jobhunter.service.agent_cv", return_value={})
     def test_test_email_overrides_recipient(self, _cv, _fn, _pdf, _em, mock_send, _c):
         kb = {"applications": []}
         res = apply_to_offer(_cfg(), kb, _job(), test_email="yo@test.com", interactive=False, mode="test")
@@ -85,11 +85,11 @@ class MxGateTests(unittest.TestCase):
     def _patches(self):
         return [
             patch("jobhunter.applying.console"),
-            patch("jobhunter.applying.send_email"),
-            patch("jobhunter.applying.agent_email", return_value={"subject": "S", "body": "B"}),
-            patch("jobhunter.applying.generate_cv_pdf"),
-            patch("jobhunter.applying.get_cv_filename", return_value="cv.pdf"),
-            patch("jobhunter.applying.agent_cv", return_value={}),
+            patch("jobhunter.service.send_email"),
+            patch("jobhunter.service.agent_email", return_value={"subject": "S", "body": "B"}),
+            patch("jobhunter.service.generate_cv_pdf"),
+            patch("jobhunter.service.get_cv_filename", return_value="cv.pdf"),
+            patch("jobhunter.service.agent_cv", return_value={}),
         ]
 
     def _run(self, mx_value, prompt_answer=None, interactive=False):
@@ -97,7 +97,7 @@ class MxGateTests(unittest.TestCase):
         ps = self._patches()
         mocks = [p.start() for p in ps]
         try:
-            with patch("jobhunter.applying.domain_accepts_mail", return_value=mx_value):
+            with patch("jobhunter.service.domain_accepts_mail", return_value=mx_value):
                 if interactive:
                     with patch("jobhunter.applying.Prompt") as mock_prompt:
                         mock_prompt.ask.return_value = prompt_answer if prompt_answer is not None else "s"
@@ -125,7 +125,7 @@ class MxGateTests(unittest.TestCase):
         ps = self._patches()
         mocks = [p.start() for p in ps]
         try:
-            with patch("jobhunter.applying.domain_accepts_mail", return_value=False):
+            with patch("jobhunter.service.domain_accepts_mail", return_value=False):
                 with patch("jobhunter.applying.Prompt") as mock_prompt:
                     mock_prompt.ask.side_effect = ["s", "hr@acme-corp.com"]
                     res = apply_to_offer(_cfg(), kb, _job(), interactive=True)
@@ -142,7 +142,7 @@ class MxGateTests(unittest.TestCase):
         ps = self._patches()
         mocks = [p.start() for p in ps]
         try:
-            with patch("jobhunter.applying.domain_accepts_mail", return_value=False):
+            with patch("jobhunter.service.domain_accepts_mail", return_value=False):
                 with patch("jobhunter.applying.Prompt") as mock_prompt:
                     mock_prompt.ask.side_effect = ["s", ""]
                     res = apply_to_offer(_cfg(), kb, _job(), interactive=True)
@@ -157,7 +157,7 @@ class MxGateTests(unittest.TestCase):
         ps = self._patches()
         [p.start() for p in ps]
         try:
-            with patch("jobhunter.applying.domain_accepts_mail") as mock_mx:
+            with patch("jobhunter.service.domain_accepts_mail") as mock_mx:
                 res = apply_to_offer(_cfg(), kb, _job(), test_email="yo@test.com", interactive=False, mode="test")
         finally:
             for p in ps:
