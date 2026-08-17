@@ -1,6 +1,9 @@
 // Mock del Bridge para desarrollo en navegador (sin pywebview).
-// Con #onboarding en la URL arranca sin configurar. Solo se activa si no hay pywebview.
+// Con #onboarding en la URL arranca sin configurar.
+// Se instala DIFERIDO (1.2s tras load): pywebview inyecta su API despues de
+// cargar la pagina, asi que si el bridge real aparece en ese lapso, gana el.
 (function () {
+  function install() {
   if (window.pywebview) return;
 
   const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -182,4 +185,7 @@
     },
   };
   window.dispatchEvent(new Event('pywebviewready'));
+  }
+  window.addEventListener('pywebviewready', () => { window.__realBridge = true; }, { once: true });
+  setTimeout(() => { if (!window.__realBridge) install(); }, 1600);
 })();

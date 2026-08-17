@@ -5,7 +5,7 @@ window.apiReady = new Promise(resolve => {
   if (window.pywebview && window.pywebview.api) { resolve(); return; }
   window.addEventListener('pywebviewready', () => resolve());
   // fallback devmock: devmock.js define window.pywebview y dispara el evento
-  setTimeout(() => { if (window.pywebview && window.pywebview.api) resolve(); }, 1500);
+  setTimeout(() => { if (window.pywebview && window.pywebview.api) resolve(); }, 2000);
 });
 
 // Llama un metodo del Bridge. Retorna {ok, data, error}.
