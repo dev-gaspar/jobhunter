@@ -35,12 +35,10 @@ jobs:
       - name: Selftest del build congelado
         shell: pwsh
         run: |
-          & .\dist\JobHunter\JobHunter.exe --selftest
-          if ($LASTEXITCODE -ne 0) {
-            Get-Content "$env:TEMP\jobhunter_selftest.txt" -ErrorAction SilentlyContinue
-            exit 1
-          }
-          Get-Content "$env:TEMP\jobhunter_selftest.txt"
+          # La app es GUI (sin consola): hay que esperar el proceso explicitamente
+          $p = Start-Process -FilePath .\dist\JobHunter\JobHunter.exe -ArgumentList "--selftest" -Wait -PassThru
+          Get-Content "$env:TEMP\jobhunter_selftest.txt" -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) { exit 1 }
 
       - name: Descargar bootstrapper WebView2
         shell: pwsh

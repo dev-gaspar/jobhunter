@@ -14,12 +14,10 @@ pyinstaller --noconfirm desktop/packaging/jobhunter.spec
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller fallo" }
 
 Write-Host "== 3/4 Selftest ==" -ForegroundColor Cyan
-& "$repo\dist\JobHunter\JobHunter.exe" --selftest
-if ($LASTEXITCODE -ne 0) {
-    Get-Content "$env:TEMP\jobhunter_selftest.txt" -ErrorAction SilentlyContinue
-    throw "Selftest fallo"
-}
-Get-Content "$env:TEMP\jobhunter_selftest.txt"
+# La app es GUI (sin consola): esperar el proceso explicitamente
+$st = Start-Process -FilePath "$repo\dist\JobHunter\JobHunter.exe" -ArgumentList "--selftest" -Wait -PassThru
+Get-Content "$env:TEMP\jobhunter_selftest.txt" -ErrorAction SilentlyContinue
+if ($st.ExitCode -ne 0) { throw "Selftest fallo" }
 Write-Host "Selftest OK" -ForegroundColor Green
 
 if ($SkipInstaller) { Write-Host "Instalador omitido (-SkipInstaller)"; exit 0 }
