@@ -8,7 +8,22 @@ Herramienta CLI que automatiza la busqueda de empleo en LinkedIn. Escanea public
 
 Funciona para cualquier sector: tecnologia, marketing, ventas, diseno, administracion, salud, educacion, etc.
 
-## Instalacion rapida
+## App de escritorio (Windows)
+
+Para usuarios no tecnicos: descarga el instalador, abrelo y sigue el onboarding
+grafico (clave de Gemini, tu CV en PDF, Gmail y LinkedIn). Sin dependencias —
+no necesitas Python, Git ni terminal.
+
+**[Descargar JobHunterSetup-x64.exe](https://github.com/dev-gaspar/jobhunter/releases/latest/download/JobHunterSetup-x64.exe)**
+
+> La primera vez Windows puede mostrar el aviso de SmartScreen (instalador sin
+> firma): pulsa "Mas informacion" y luego "Ejecutar de todas formas".
+
+La app y el CLI comparten datos en `~/.jobhunter` (config, historial y sesion
+de LinkedIn): puedes usar ambos. La app se actualiza sola avisando cuando hay
+una nueva version en GitHub Releases.
+
+## Instalacion rapida (CLI)
 
 **macOS / Linux:**
 

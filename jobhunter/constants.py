@@ -1,14 +1,27 @@
 """Constantes globales de JobHunter: versiones, paths, banners, modelos."""
 import os
+import sys
 
-# BASE_DIR apunta a la raiz del proyecto (un nivel arriba de jobhunter/).
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+def _resolve_base_dir():
+    """Raiz de datos: JOBHUNTER_HOME > ~/.jobhunter (app congelada) > raiz del repo."""
+    env = os.environ.get("JOBHUNTER_HOME")
+    if env:
+        return env
+    if getattr(sys, "frozen", False):
+        d = os.path.join(os.path.expanduser("~"), ".jobhunter")
+        os.makedirs(d, exist_ok=True)
+        return d
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+BASE_DIR = _resolve_base_dir()
 
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 SESSION_DIR = os.path.join(BASE_DIR, ".session")
 KB_PATH = os.path.join(BASE_DIR, "knowledge.json")
 
-VERSION = "1.2.0"
+VERSION = "2.0.0"
 
 GEMINI_MODELS = [
     "gemini-2.5-flash",

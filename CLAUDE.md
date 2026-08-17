@@ -54,6 +54,14 @@ All agents call Gemini via direct HTTP POST (`call_gemini()` / `call_gemini_visi
 ### Key Files
 
 - `job.py` — entry point shim (~45 lineas): ensure_deps + delega a jobhunter.cli.main
+- `jobhunter/service.py` — fachada sin UI (eventos via on_event): search_offers,
+  prepare/send_application, onboarding (validate_gemini_key, verify_smtp,
+  extract_profile_from_cv, linkedin_login, regenerate_queries). CLI y desktop la comparten.
+- `desktop/` — app de escritorio Windows (pywebview + WebView2): `api.py` (Bridge
+  testeable, NUNCA importa webview), `app.py` (ventana + --selftest), `ui/` (HTML/CSS/JS
+  vanilla con el design system de la landing, devmock para desarrollo en navegador),
+  `packaging/` (PyInstaller spec + Inno Setup + build.ps1). Datos compartidos con el
+  CLI via constants.BASE_DIR (JOBHUNTER_HOME / ~/.jobhunter en frozen).
 - `jobhunter/` — paquete modular con toda la logica
   - `constants.py`, `ui.py`, `banner.py`, `config.py`, `storage.py` — hojas
   - `ai/base.py` + `ai/gemini.py` — puerto AIProvider + adaptador Gemini
