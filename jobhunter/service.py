@@ -401,6 +401,7 @@ def send_application(cfg, kb, job, prepared, to, mode="run", recruiter_email=Non
         "query": job.get("query"),
         "author_url": job.get("author_url"),
         "author_name": job.get("author_name"),
+        "cv_path": prepared.get("cv_path"),
     }
     kb["applications"].append(entry)
     return {"status": "sent", "error": None, "entry": entry}
